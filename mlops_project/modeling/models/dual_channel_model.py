@@ -13,9 +13,10 @@ class WeightedFusionLayer(layers.Layer):
     
     def __init__(self, name: str = "weighted_fusion", **kwargs) -> None:
         super().__init__(name=name, **kwargs)
-        self.fusion_weight: Optional[tf.Variable] = None
         
-    def build(self, input_shape: Tuple[int, ...]) -> None:
+    def build(self, input_shape) -> None:
+        # input_shape may be a list/tuple of shapes (one per channel)
+        # We don't need to use it, just keep the weight definition
         self.fusion_weight = self.add_weight(
             name="fusion_weight",
             shape=(1,),
@@ -43,17 +44,15 @@ class WeightedFusionLayer(layers.Layer):
 
 class Channel1Branch(keras.Model):
     """
-    Channel 1: CLAHE images → Inception V3 → fc1_1 → fc1_2.
+    Channel 1: CLAHE images → Inception V3 → GlobalAvgPool (fc1_1) → Dense(500) (fc1_2).
     
-    fv1 = feature vector from Inception V3 (2048 dimensions)
-    fc1_1, fc1_2 = fully connected layers (dimensions should be verified from paper)
+    Matches Figure 7 of the paper:
+    CLAHE image → resized to 299×299 → InceptionV3 → GlobalAveragePooling2D → Dense(500)
     """
     
     def __init__(
         self, 
-        input_shape: Tuple[int, int, int] = (224, 224, 3),
-        fc1_1_dim: int = 512,
-        fc1_2_dim: int = 256
+        input_shape: Tuple[int, int, int] = (224, 224, 3)
     ) -> None:
         super().__init__(name="channel1_branch")
         
@@ -62,14 +61,11 @@ class Channel1Branch(keras.Model):
             include_top=False,
             weights="imagenet",
             input_shape=(299, 299, input_shape[2]),
-            pooling="avg",
+            pooling=None,
             name="channel1_inception_v3"
         )
-        # FC layers after feature extraction (as per paper diagram)
-        # fv1 (2048) → fc1_1 → fc1_2
-        # Note: Dimensions should be verified from the paper's methodology section
-        self.fc1_1 = layers.Dense(fc1_1_dim, activation="relu", name="fc1_1")
-        self.fc1_2 = layers.Dense(fc1_2_dim, activation="relu", name="fc1_2")
+        self.fc1_1 = layers.GlobalAveragePooling2D(name="fc1_1")
+        self.fc1_2 = layers.Dense(500, activation="relu", name="fc1_2")
     
     def call(
         self,
@@ -77,25 +73,23 @@ class Channel1Branch(keras.Model):
         training: Optional[bool] = None
     ) -> tf.Tensor:
         x = self.resize(inputs)
-        fv1 = self.backbone(x, training=training)  # 2048 features
-        x = self.fc1_1(fv1, training=training)    # 512 features
-        x = self.fc1_2(x, training=training)       # 256 features
+        x = self.backbone(x, training=training)
+        x = self.fc1_1(x)
+        x = self.fc1_2(x, training=training)
         return x
 
 
 class Channel2Branch(keras.Model):
     """
-    Channel 2: CECED images → VGG-16 → fc2_1 → fc2_2.
+    Channel 2: CECED images → VGG-16 → GlobalAvgPool (fc2_1) → Dense(500) (fc2_2).
     
-    fv2 = feature vector from VGG-16 (512 dimensions)
-    fc2_1, fc2_2 = fully connected layers (dimensions should be verified from paper)
+    Matches Figure 7 of the paper:
+    CECED image → VGG16 → GlobalAveragePooling2D → Dense(500)
     """
     
     def __init__(
         self, 
-        input_shape: Tuple[int, int, int] = (224, 224, 3),
-        fc2_1_dim: int = 512,
-        fc2_2_dim: int = 256
+        input_shape: Tuple[int, int, int] = (224, 224, 3)
     ) -> None:
         super().__init__(name="channel2_branch")
         
@@ -103,24 +97,20 @@ class Channel2Branch(keras.Model):
             include_top=False,
             weights="imagenet",
             input_shape=input_shape,
-            pooling="avg",
+            pooling=None,
             name="channel2_vgg16"
         )
-        # FC layers after feature extraction (as per paper diagram)
-        # fv2 (512) → fc2_1 → fc2_2
-        # Note: Dimensions should be verified from the paper's methodology section
-        # Note: fc2_1 and fc2_2 can have different dimensions than fc1_1 and fc1_2
-        self.fc2_1 = layers.Dense(fc2_1_dim, activation="relu", name="fc2_1")
-        self.fc2_2 = layers.Dense(fc2_2_dim, activation="relu", name="fc2_2")
+        self.fc2_1 = layers.GlobalAveragePooling2D(name="fc2_1")
+        self.fc2_2 = layers.Dense(500, activation="relu", name="fc2_2")
     
     def call(
         self,
         inputs: tf.Tensor,
         training: Optional[bool] = None
     ) -> tf.Tensor:
-        fv2 = self.backbone(inputs, training=training)  # 512 features
-        x = self.fc2_1(fv2, training=training)          # 512 features
-        x = self.fc2_2(x, training=training)            # 256 features
+        x = self.backbone(inputs, training=training)
+        x = self.fc2_1(x)
+        x = self.fc2_2(x, training=training)
         return x
 
 
@@ -128,48 +118,24 @@ class DualChannelDiabeticRetinopathyModel(keras.Model):
     """
     Dual-channel model for diabetic retinopathy detection.
     
-    Architecture (as per paper diagram):
-    - Channel 1 (CLAHE): Inception V3 (fv1) → fc1_1 → fc1_2
-    - Channel 2 (CECED): VGG-16 (fv2) → fc2_1 → fc2_2
-    - Weighted fusion of fc1_2 and fc2_2
-    - Final FC layer (f1) → Softmax
-    
-    Note: fv1 and fv2 are feature vectors extracted from the backbones.
-    FC layer dimensions should be verified from the paper's methodology section.
+    Architecture (as per paper Figure 7):
+    - Channel 1 (CLAHE): InceptionV3 → GlobalAvgPool (fc1_1) → Dense(500) (fc1_2)
+    - Channel 2 (CECED): VGG16 → GlobalAvgPool (fc2_1) → Dense(500) (fc2_2)
+    - Weighted fusion: f1 = w * fc1_2 + (1 - w) * fc2_2
+    - Classifier: Dense(num_classes, activation="softmax")(f1)
     """
     
     def __init__(
         self,
         num_classes: int = 5,
-        input_shape: Tuple[int, int, int] = (224, 224, 3),
-        fc1_1_dim: int = 512,
-        fc1_2_dim: int = 256,
-        fc2_1_dim: int = 512,
-        fc2_2_dim: int = 256,
-        f1_dim: int = 256
+        input_shape: Tuple[int, int, int] = (224, 224, 3)
     ) -> None:
         super().__init__(name="dual_channel_dr_model")
         
-        self.num_classes: int = num_classes
-        self.input_shape: Tuple[int, int, int] = input_shape
-        
-        self.channel1_branch = Channel1Branch(
-            input_shape=input_shape,
-            fc1_1_dim=fc1_1_dim,
-            fc1_2_dim=fc1_2_dim
-        )
-        self.channel2_branch = Channel2Branch(
-            input_shape=input_shape,
-            fc2_1_dim=fc2_1_dim,
-            fc2_2_dim=fc2_2_dim
-        )
+        self.channel1_branch = Channel1Branch(input_shape=input_shape)
+        self.channel2_branch = Channel2Branch(input_shape=input_shape)
         self.fusion_layer = WeightedFusionLayer()
-        
-        # Final FC layer (f1) before softmax (as per paper diagram)
-        # Dimension should be verified from the paper
-        self.f1 = layers.Dense(f1_dim, activation="relu", name="f1")
-        self.classifier = layers.Dense(num_classes, name="classifier")
-        self.softmax = layers.Activation("softmax", name="softmax")
+        self.classifier = layers.Dense(num_classes, activation="softmax", name="classifier")
     
     def call(
         self,
@@ -178,16 +144,9 @@ class DualChannelDiabeticRetinopathyModel(keras.Model):
     ) -> tf.Tensor:
         channel1_image, channel2_image = inputs
         
-        # Process through each channel: fv → fc1 → fc2
-        fc1_2 = self.channel1_branch(channel1_image, training=training)  # 256 features
-        fc2_2 = self.channel2_branch(channel2_image, training=training)  # 256 features
-        
-        # Weighted fusion of fc1_2 and fc2_2
-        fused = self.fusion_layer([fc1_2, fc2_2])  # 256 features
-        
-        # Final FC layer (f1) before classification
-        x = self.f1(fused, training=training)      # 256 features
-        x = self.classifier(x)                     # num_classes
-        predictions = self.softmax(x)              # softmax probabilities
+        fc1_2 = self.channel1_branch(channel1_image, training=training)
+        fc2_2 = self.channel2_branch(channel2_image, training=training)
+        fused = self.fusion_layer([fc1_2, fc2_2])
+        predictions = self.classifier(fused)
         
         return predictions

@@ -39,22 +39,20 @@ Both channels are derived from the same original fundus image using different pr
 **Note:** Preprocessing should be done before feeding images to the model.
 
 ### 2. Feature Extraction and Processing
-Each preprocessed channel is processed through different pre-trained CNNs followed by fully connected layers (as per paper diagram):
+Each preprocessed channel is processed through different pre-trained CNNs followed by fully connected layers (as per paper Figure 7):
 - **Channel 1 (CLAHE)**: 
-  - **Inception V3** extracts feature vector **fv1** (2048 dimensions)
-  - **fc1_1**: First fully connected layer (dimensions per paper)
-  - **fc1_2**: Second fully connected layer (dimensions per paper)
+  - Input resized to **299×299** (for Inception V3)
+  - **Inception V3** backbone extracts feature maps (conv only, no pooling)
+  - **fc1_1**: GlobalAveragePooling2D (pools feature maps to vector)
+  - **fc1_2**: Dense(500, relu) layer
+  - Output: 500-dimensional feature vector
 - **Channel 2 (CECED)**: 
-  - **VGG-16** extracts feature vector **fv2** (512 dimensions)
-  - **fc2_1**: First fully connected layer (dimensions per paper)
-  - **fc2_2**: Second fully connected layer (dimensions per paper)
+  - **VGG-16** backbone extracts feature maps (conv only, no pooling)
+  - **fc2_1**: GlobalAveragePooling2D (pools feature maps to vector)
+  - **fc2_2**: Dense(500, relu) layer
+  - Output: 500-dimensional feature vector
 - Both backbones use weights pre-trained on ImageNet
-- The model automatically resizes inputs to match each backbone's requirements (Inception V3: 299x299, VGG-16: 224x224)
-
-**Note:** 
-- **fv1** and **fv2** are the feature vectors (outputs) from the CNN backbones
-- The FC layer dimensions (fc1_1, fc1_2, fc2_1, fc2_2, f1) should be verified from the paper's methodology section
-- Current implementation uses reasonable defaults (512, 256) but these can be adjusted via constructor parameters
+- Both channels output 500-dimensional features for fusion
 
 ### 3. Weighted Fusion
 The features from both channels are combined using a **learnable weight**:
@@ -63,10 +61,9 @@ The features from both channels are combined using a **learnable weight**:
 - The weight `w` is learned during training
 
 ### 4. Final Classification
-After fusion, the features go through:
-- **f1**: Final fully connected layer (256 dim)
-- **Softmax**: Classification layer
-- Output: probabilities for 5 DR severity levels
+After weighted fusion, the features go through:
+- **Classifier**: Dense(num_classes, activation="softmax")
+- Output: probabilities for 5 DR severity levels (one-hot encoded)
 
 ## Code Structure
 
@@ -88,25 +85,28 @@ Main model class. Inherits from `keras.Model`.
 **Parameters:**
 - `num_classes`: Number of DR severity levels (default: 5)
 - `input_shape`: Image size (default: (224, 224, 3))
-  - Note: The model automatically resizes inputs internally (Inception V3 needs 299x299, VGG-16 uses 224x224)
-- `fc1_1_dim`, `fc1_2_dim`: FC layer dimensions for Channel 1 (default: 512, 256)
-- `fc2_1_dim`, `fc2_2_dim`: FC layer dimensions for Channel 2 (default: 512, 256)
-- `f1_dim`: Final FC layer dimension before softmax (default: 256)
-  
-**Note:** FC layer dimensions should be verified from the paper's methodology section. Defaults are reasonable but may not match the paper exactly.
+  - Note: The model automatically resizes Channel 1 inputs to 299×299 for Inception V3
+
+**Architecture:** Matches Figure 7 of the paper exactly:
+- Channel 1 outputs 500-dim features
+- Channel 2 outputs 500-dim features
+- Weighted fusion combines them
+- Direct classification with softmax (no intermediate FC layer)
 
 ### `Channel1Branch`
-Processes CLAHE preprocessed images using Inception V3.
-- Resizes input to 299x299
-- Extracts features using Inception V3 (fv1: 2048 dim)
-- Processes through fc1_1 (512 dim) → fc1_2 (256 dim)
-- Outputs 256-dimensional features
+Processes CLAHE preprocessed images using Inception V3 (as per paper Figure 7).
+- Resizes input to 299×299
+- Extracts feature maps using Inception V3 (no pooling in backbone)
+- fc1_1: GlobalAveragePooling2D (pools feature maps to vector)
+- fc1_2: Dense(500, relu)
+- Outputs 500-dimensional features
 
 ### `Channel2Branch`
-Processes CECED preprocessed images using VGG-16.
-- Extracts features using VGG-16 (fv2: 512 dim)
-- Processes through fc2_1 (512 dim) → fc2_2 (256 dim)
-- Outputs 256-dimensional features
+Processes CECED preprocessed images using VGG-16 (as per paper Figure 7).
+- Extracts feature maps using VGG-16 (no pooling in backbone)
+- fc2_1: GlobalAveragePooling2D (pools feature maps to vector)
+- fc2_2: Dense(500, relu)
+- Outputs 500-dimensional features
 
 ### `WeightedFusionLayer`
 Custom layer that combines features from two channels using a learnable weight.
@@ -121,39 +121,30 @@ CLAHE Image                                CECED Image
 (224×224×3)                                (224×224×3)
     │                                           │
     ├─→ Resize to 299×299                      ├─→ VGG-16
-    │                                           │   (fv2: 512)
+    │                                           │   (feature maps)
     └─→ Inception V3                            │
-        (fv1: 2048)                             │
+        (feature maps)                           │
             │                                   │
-            ├─→ fc1_1 (512)                     ├─→ fc2_1 (512)
+            ├─→ fc1_1 (GlobalAvgPool)            ├─→ fc2_1 (GlobalAvgPool)
             │                                   │
-            └─→ fc1_2 (256)                     └─→ fc2_2 (256)
+            └─→ fc1_2 (Dense 500)                └─→ fc2_2 (Dense 500)
                 │                                   │
                 └───────────┬───────────────────────┘
                             │
                     Weighted Fusion
-                    (256 features)
+                    (500 features)
                             │
-                            ├─→ f1 (256)
-                            │
-                            └─→ Softmax (5 classes)
+                            └─→ Classifier (Dense 5, softmax)
                                 │
                                 └─→ DR Severity Classification
 ```
 
-**Note:** The architecture directly matches the paper diagram:
-- Channel 1: CLAHE → Inception V3 → fc1_1 → fc1_2
-- Channel 2: CECED → VGG-16 → fc2_1 → fc2_2
-- Each channel has its own FC layers before fusion (fc1_1, fc1_2 vs fc2_1, fc2_2)
-- FC layers can have different configurations per channel (fv1 starts at 2048, fv2 starts at 512)
-- After fusion: f1 → Softmax for final classification
-
-**Important:** 
-- **fv1** = feature vector from Inception V3 (2048 dim) - this is the backbone output
-- **fv2** = feature vector from VGG-16 (512 dim) - this is the backbone output
-- The FC layer dimensions (fc1_1, fc1_2, fc2_1, fc2_2, f1) shown in the diagram are **reasonable defaults** (512, 256)
-- **The paper should be consulted** for the exact dimensions specified in the methodology section
-- These dimensions can be adjusted via constructor parameters if needed
+**Note:** The architecture directly matches Figure 7 of the paper:
+- Channel 1: CLAHE → Resize(299×299) → Inception V3 → GlobalAvgPool (fc1_1) → Dense(500) (fc1_2)
+- Channel 2: CECED → VGG-16 → GlobalAvgPool (fc2_1) → Dense(500) (fc2_2)
+- Both channels output 500-dimensional features
+- Weighted fusion: f1 = w * fc1_2 + (1 - w) * fc2_2
+- Direct classification: Dense(num_classes, softmax) on fused features
 
 ## Example Usage
 
@@ -161,7 +152,7 @@ CLAHE Image                                CECED Image
 import tensorflow as tf
 from mlops_project.modeling.models import DualChannelDiabeticRetinopathyModel
 
-# Create model
+# Create model (matches paper Figure 7 exactly)
 model = DualChannelDiabeticRetinopathyModel(num_classes=5)
 
 # Prepare your data
