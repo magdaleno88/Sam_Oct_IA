@@ -1,0 +1,27 @@
+[project]
+name = "sam-ai"
+version = "0.1.0"
+description = "A computer vision project to aid in the diagnosis of diabetic retinopathy."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "tensorflow>=2.15.0",  # CPU by default (includes Keras)
+]
+
+[project.optional-dependencies]
+
+# NVIDIA GPU support (CUDA)
+# Requires: NVIDIA GPU, CUDA Toolkit, cuDNN
+# Install with: uv sync --extra cuda
+cuda = [
+    "tensorflow[and-cuda]>=2.15.0",
+]
+
+# Apple Silicon GPU support (MPS/Metal) - ARM64 only
+# Requires: macOS 12.0+, Apple Silicon (M1/M2/M3)
+# Install with: uv sync --extra mps
+# Note: Only works on Apple Silicon, not Intel Macs
+mps = [
+    "tensorflow-macos>=2.15.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "tensorflow-metal>=1.0.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
