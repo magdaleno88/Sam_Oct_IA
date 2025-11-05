@@ -9,6 +9,7 @@ A computer vision project to aid in the diagnosis of diabetic retinopathy using 
 - [Testing](#testing)
 - [Project Overview](#project-overview)
 - [Documentation](#documentation)
+- [Dataset Structure](#dataset-structure)
 - [References](#references)
 
 ## Quick Start
@@ -99,6 +100,17 @@ SAM-AI implements a dual-channel weighted fusion deep learning model for diabeti
 - **[Project Structure](docs/project-structure.md)** - Complete directory layout and module descriptions
 - **[Model Documentation](mlops_project/modeling/models/README.md)** - Model architecture and usage examples
 - **[Tests Documentation](tests/README.md)** - Testing guide and pytest usage
+- **[Dataset Structure](data/README.md)** - Expected dataset organization and loading instructions
+
+## Dataset Structure
+
+The project expects a specific dataset structure for training the dual-channel model. See [Dataset Structure Documentation](data/README.md) for:
+- Required folder organization
+- CLAHE and CECED preprocessing channels
+- 5-class diabetic retinopathy severity levels
+- TensorFlow dataset loading examples
+
+⚠️ **Status**: Dataset structure is planned but pending implementation.
 
 ## References
 
