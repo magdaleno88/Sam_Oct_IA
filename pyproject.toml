@@ -9,6 +9,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Testing dependencies
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
 
 # NVIDIA GPU support (CUDA)
 # Requires: NVIDIA GPU, CUDA Toolkit, cuDNN
@@ -25,3 +30,67 @@ mps = [
     "tensorflow-macos>=2.15.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "tensorflow-metal>=1.0.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
+
+[tool.pytest.ini_options]
+# Pytest configuration
+# This section configures default pytest behavior to avoid passing many parameters
+
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output options
+# Verbose output by default
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--disable-warnings",
+]
+
+# Coverage configuration (when using pytest-cov)
+# Uncomment lines below to enable coverage by default:
+# addopts = [
+#     "-v",
+#     "--strict-markers",
+#     "--tb=short",
+#     "--disable-warnings",
+#     "--cov=mlops_project",
+#     "--cov-report=term-missing",
+#     "--cov-report=html:htmlcov",
+# ]
+
+# Markers for categorizing tests
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "gpu: marks tests that require GPU",
+    "model: marks tests related to model architecture",
+]
+
+# Minimum pytest version
+minversion = "7.0"
+
+# Console output style
+console_output_style = "progress"
+
+# Filter warnings
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning:tensorflow.*",
+]
+
+# Logging
+log_cli = false
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+# Timeout for tests (in seconds)
+# Uncomment to enable timeout:
+# timeout = 300
+# timeout_method = "thread"
