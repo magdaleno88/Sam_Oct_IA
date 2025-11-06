@@ -1,12 +1,29 @@
+[build-system]
+requires = ["uv_build>=0.9.4,<0.10.0"]
+build-backend = "uv_build"
+
 [project]
 name = "sam-ai"
+# Note: Package name in code is sam_ml
 version = "0.1.0"
 description = "A computer vision project to aid in the diagnosis of diabetic retinopathy."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "tensorflow>=2.15.0",  # CPU by default (includes Keras)
+    "tensorflow==2.16.2",
+    "opencv-python>=4.8.0,<4.11.0", # Compatible with numpy<2.0 (required by tensorflow 2.16.2)
+    "datasets>=4.4.1",
+    "pillow>=10.0.0", # Required for PIL Image support (used by datasets library)
+    "tqdm>=4.66.0", # Progress bars for long-running operations
 ]
+
+[project.scripts]
+preprocess-dataset = "sam_ml.preprocessing:main"
+
+[tool.uv.build-backend]
+# Configure uv_build to use root-level packages (not src/ layout)
+module-name = "sam_ml"
+module-root = ""
 
 [project.optional-dependencies]
 # Testing dependencies
@@ -15,11 +32,17 @@ test = [
     "pytest-cov>=4.0.0",
 ]
 
+# Jupyter notebook dependencies
+notebook = [
+    "jupyter>=1.0.0",
+    "matplotlib>=3.8.0",
+]
+
 # NVIDIA GPU support (CUDA)
 # Requires: NVIDIA GPU, CUDA Toolkit, cuDNN
 # Install with: uv sync --extra cuda
 cuda = [
-    "tensorflow[and-cuda]>=2.15.0",
+    "tensorflow[and-cuda]==2.16.2",
 ]
 
 # Apple Silicon GPU support (MPS/Metal) - ARM64 only
@@ -27,40 +50,21 @@ cuda = [
 # Install with: uv sync --extra mps
 # Note: Only works on Apple Silicon, not Intel Macs
 mps = [
-    "tensorflow-macos>=2.15.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "tensorflow-metal>=1.0.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "tensorflow-metal==1.2.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [tool.pytest.ini_options]
 # Pytest configuration
 # This section configures default pytest behavior to avoid passing many parameters
 
-# Test discovery
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-
 # Output options
-# Verbose output by default
+# Simple test configuration by default (no coverage)
 addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
     "--disable-warnings",
 ]
-
-# Coverage configuration (when using pytest-cov)
-# Uncomment lines below to enable coverage by default:
-# addopts = [
-#     "-v",
-#     "--strict-markers",
-#     "--tb=short",
-#     "--disable-warnings",
-#     "--cov=mlops_project",
-#     "--cov-report=term-missing",
-#     "--cov-report=html:htmlcov",
-# ]
 
 # Markers for categorizing tests
 markers = [
@@ -71,26 +75,11 @@ markers = [
     "model: marks tests related to model architecture",
 ]
 
-# Minimum pytest version
-minversion = "7.0"
-
 # Console output style
 console_output_style = "progress"
-
-# Filter warnings
-filterwarnings = [
-    "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning",
-    "ignore::UserWarning:tensorflow.*",
-]
 
 # Logging
 log_cli = false
 log_cli_level = "INFO"
 log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
-
-# Timeout for tests (in seconds)
-# Uncomment to enable timeout:
-# timeout = 300
-# timeout_method = "thread"

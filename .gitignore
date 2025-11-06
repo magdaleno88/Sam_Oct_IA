@@ -159,12 +159,6 @@ models/*.pth
 models/*.ckpt
 models/*.weights.h5
 
-# Data files (versioned with DVC)
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-
 # MLflow
 mlruns/
 .mlflow/

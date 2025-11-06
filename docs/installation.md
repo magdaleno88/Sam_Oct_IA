@@ -6,13 +6,15 @@ This guide provides detailed instructions for installing and setting up the SAM-
 
 This project uses `uv` for package management. TensorFlow (which includes Keras) is installed with CPU support by default, with optional GPU acceleration available.
 
+**Version:** TensorFlow 2.16.2 (fixed version for compatibility with macOS Intel and Apple Silicon).
+
 ### CPU (Default - All Platforms)
 
 ```bash
 uv sync
 ```
 
-This installs TensorFlow with CPU support by default. Works on all platforms (Linux, macOS Intel, macOS Apple Silicon, Windows).
+This installs TensorFlow 2.16.2 with CPU support by default. Works on all platforms (Linux, macOS Intel, macOS Apple Silicon, Windows).
 
 ### NVIDIA GPU (CUDA)
 
@@ -25,7 +27,7 @@ uv sync --extra cuda
 - CUDA Toolkit installed
 - cuDNN library installed
 
-The `tensorflow[and-cuda]` package will replace the base TensorFlow installation.
+The `tensorflow[and-cuda]==2.16.2` package will replace the base TensorFlow installation.
 
 ### Apple Silicon (MPS/Metal) - ARM64 Only
 
@@ -36,8 +38,12 @@ uv sync --extra mps
 **Requirements:**
 - Apple Silicon Mac (M1/M2/M3)
 - macOS 12.0 or higher
+- Base TensorFlow 2.16.2 (installed by default)
 
-**Note:** Only works on Apple Silicon Macs. On Intel Macs, use `--extra cpu` instead. The platform markers will automatically prevent installation on Intel Macs.
+**Note:** 
+- Only works on Apple Silicon Macs. On Intel Macs, use CPU installation instead.
+- `tensorflow-metal==1.2.0` is installed alongside TensorFlow 2.16.2.
+- `tensorflow-macos` is not required; `tensorflow-metal` works directly with the base TensorFlow package.
 
 ### Verify Installation
 

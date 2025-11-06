@@ -8,6 +8,7 @@ A computer vision project to aid in the diagnosis of diabetic retinopathy using 
 - [Installation](#installation)
 - [Testing](#testing)
 - [Project Overview](#project-overview)
+- [Preprocessing](#preprocessing)
 - [Documentation](#documentation)
 - [Dataset Structure](#dataset-structure)
 - [References](#references)
@@ -64,7 +65,7 @@ uv run pytest tests/test_dual_channel_model.py
 ### Run with coverage
 
 ```bash
-uv run pytest --cov=mlops_project --cov-report=html
+uv run pytest --cov=sam_ml --cov-report=html
 ```
 
 ### Additional options
@@ -82,6 +83,42 @@ uv run pytest -m "not slow"
 
 For more details, see [Tests Documentation](tests/README.md).
 
+## Preprocessing
+
+The project includes a flexible preprocessing module for preparing diabetic retinopathy datasets. It supports multiple dataset formats through a polymorphic processor pattern.
+
+### Quick Start
+
+Process a dataset using the CLI:
+
+```bash
+# Process EyePACS dataset
+uv run preprocess-dataset eyepacs_dataset
+```
+
+Or use it programmatically:
+
+```python
+from sam_ml.preprocessing import create_processor
+
+processor = create_processor("eyepacs_dataset")
+processor.process_dataset()
+```
+
+### Features
+
+- **Polymorphic Design**: Easy to add new dataset processors
+- **CLI Interface**: Simple command-line tool for dataset processing
+- **Dual Preprocessing**: Automatically applies both CLAHE and CECED preprocessing
+- **Flexible Configuration**: Customizable paths, split ratios, and random seeds
+- **Multi-part Zip Support**: Handles multi-part zip archives automatically
+
+### Available Datasets
+
+- `eyepacs_dataset`: EyePACS diabetic retinopathy dataset
+
+For detailed usage instructions, see [Preprocessing Documentation](sam_ml/preprocessing/README.md).
+
 ## Project Overview
 
 SAM-AI implements a dual-channel weighted fusion deep learning model for diabetic retinopathy detection, based on the research paper listed in [References](#references).
@@ -98,7 +135,8 @@ SAM-AI implements a dual-channel weighted fusion deep learning model for diabeti
 
 - **[Installation Guide](docs/installation.md)** - Detailed setup instructions for CPU, CUDA, and MPS
 - **[Project Structure](docs/project-structure.md)** - Complete directory layout and module descriptions
-- **[Model Documentation](mlops_project/modeling/models/README.md)** - Model architecture and usage examples
+- **[Model Documentation](sam_ml/modeling/models/README.md)** - Model architecture and usage examples
+- **[Preprocessing Documentation](sam_ml/preprocessing/README.md)** - Dataset preprocessing guide and CLI usage
 - **[Tests Documentation](tests/README.md)** - Testing guide and pytest usage
 - **[Dataset Structure](data/README.md)** - Expected dataset organization and loading instructions
 
@@ -124,7 +162,7 @@ The model implements the dual-channel architecture from the paper:
 - Features are fused using a learnable weighted fusion mechanism
 - Simple, direct implementation in a single module (`dual_channel_model.py`)
 
-See [Model Documentation](mlops_project/modeling/models/README.md) for detailed architecture and usage examples.
+See [Model Documentation](sam_ml/modeling/models/README.md) for detailed architecture and usage examples.
 
 ## Code Style and Styling Rules
 
@@ -198,7 +236,7 @@ import pytest
 import tensorflow as tf
 import numpy as np
 
-from mlops_project.modeling.models import MyModel
+from sam_ml.modeling.models import MyModel
 ```
 
 ### Documentation
@@ -231,7 +269,7 @@ This project uses Python's built-in type system. For static type checking, you c
 
 **Example mypy configuration:**
 ```bash
-mypy mlops_project/ --ignore-missing-imports
+mypy sam_ml/ --ignore-missing-imports
 ```
 
 ### Additional Guidelines

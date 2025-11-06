@@ -1,6 +1,6 @@
 """Model architectures for diabetic retinopathy detection."""
 
-from mlops_project.modeling.models.dual_channel_model import (
+from sam_ml.modeling.models.dual_channel_model import (
     DualChannelDiabeticRetinopathyModel,
     WeightedFusionLayer,
 )

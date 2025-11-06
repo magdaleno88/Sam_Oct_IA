@@ -7,7 +7,7 @@ This module contains a simple implementation of the dual-channel weighted fusion
 Create and use the model in just a few lines:
 
 ```python
-from mlops_project.modeling.models import DualChannelDiabeticRetinopathyModel
+from sam_ml.modeling.models import DualChannelDiabeticRetinopathyModel
 
 # Create the model
 model = DualChannelDiabeticRetinopathyModel(num_classes=5)
@@ -150,7 +150,7 @@ CLAHE Image                                CECED Image
 
 ```python
 import tensorflow as tf
-from mlops_project.modeling.models import DualChannelDiabeticRetinopathyModel
+from sam_ml.modeling.models import DualChannelDiabeticRetinopathyModel
 
 # Create model (matches paper Figure 7 exactly)
 model = DualChannelDiabeticRetinopathyModel(num_classes=5)

@@ -6,7 +6,7 @@ import pytest
 import tensorflow as tf
 import numpy as np
 
-from mlops_project.modeling.models.dual_channel_model import (
+from sam_ml.modeling.models.dual_channel_model import (
     DualChannelDiabeticRetinopathyModel,
     Channel1Branch,
     Channel2Branch,

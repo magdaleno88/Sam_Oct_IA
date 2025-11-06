@@ -6,7 +6,7 @@ This document describes the organization and structure of the SAM-AI project.
 
 ```
 sam-ai/
-├── mlops_project/          # Main source code
+├── sam_ml/          # Main source code
 │   ├── config.py           # Centralized configuration
 │   ├── dataset.py          # Data loading and preparation
 │   ├── features.py         # Feature engineering
@@ -31,7 +31,7 @@ sam-ai/
 
 ## Module Descriptions
 
-### `mlops_project/`
+### `sam_ml/`
 
 Main source code package containing all application logic.
 
@@ -100,5 +100,5 @@ This project uses DVC (Data Version Control) for:
 
 Project configuration is managed through:
 - `pyproject.toml`: Python project metadata and dependencies
-- `mlops_project/config.py`: Runtime configuration settings
+- `sam_ml/config.py`: Runtime configuration settings
 

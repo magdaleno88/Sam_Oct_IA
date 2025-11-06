@@ -42,7 +42,7 @@ uv run pytest tests/test_dual_channel_model.py
 The default configuration doesn't include coverage. To run with coverage:
 
 ```bash
-uv run pytest --cov=mlops_project --cov-report=html
+uv run pytest --cov=sam_ml --cov-report=html
 ```
 
 Or edit `pyproject.toml` under `[tool.pytest.ini_options]` to enable coverage by default (see configuration section).
@@ -103,7 +103,7 @@ If you prefer to run pytest directly (after installing dependencies):
 ```bash
 pytest tests/
 pytest tests/test_fusion_layers.py
-pytest tests/ --cov=mlops_project --cov-report=html
+pytest tests/ --cov=sam_ml --cov-report=html
 pytest tests/ -v
 ```
 
