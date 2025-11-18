@@ -194,3 +194,6 @@ config.local.yml
 checkpoints/
 outputs/
 
+# Data files
+data/**/*.zip
+

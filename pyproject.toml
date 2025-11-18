@@ -63,7 +63,13 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--disable-warnings",
+]
+
+# Filter warnings
+# Suppress third-party library deprecation warnings (protobuf/TensorFlow)
+# These warnings come from protobuf library used by TensorFlow
+filterwarnings = [
+    "ignore::DeprecationWarning",
 ]
 
 # Markers for categorizing tests
