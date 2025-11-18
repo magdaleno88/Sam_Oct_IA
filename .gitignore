@@ -180,9 +180,6 @@ tensorboard_logs/
 *.bak
 *.swp
 
-# Notebook outputs (if you have notebooks)
-*.ipynb
-
 # Local configuration
 .env.local
 .env.*.local
