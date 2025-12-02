@@ -119,6 +119,225 @@ processor.process_dataset()
 
 For detailed usage instructions, see [Preprocessing Documentation](sam_ml/preprocessing/README.md).
 
+## Training / Entrenamiento
+
+El proyecto incluye un script de entrenamiento completo con soporte para hiperparámetros configurables mediante argumentos de línea de comandos.
+
+#### Inicio Rápido
+
+Entrena el modelo con los valores por defecto:
+
+```bash
+# Entrenar con configuración por defecto
+uv run python -m sam_ml.modeling.train
+```
+
+#### Ejemplos de Uso
+
+**1. Entrenamiento básico con valores por defecto:**
+
+```bash
+uv run python -m sam_ml.modeling.train
+```
+
+Este comando utiliza:
+- Learning rate: 0.001
+- Batch size: 32
+- Epochs: 50
+- Optimizador: Adam con parámetros por defecto
+
+**2. Entrenamiento con learning rate personalizado:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --learning-rate 0.0001 \
+    --epochs 100
+```
+
+**3. Entrenamiento con hiperparámetros personalizados:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --learning-rate 0.0001 \
+    --beta-1 0.95 \
+    --beta-2 0.99 \
+    --epsilon 1e-8 \
+    --weight-decay 1e-4 \
+    --batch-size 64 \
+    --epochs 100
+```
+
+**4. Entrenamiento con dataset personalizado:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --dataset-path data/processed/mi_dataset \
+    --dataset-name mi_dataset \
+    --batch-size 32
+```
+
+**5. Entrenamiento con configuración de checkpoints:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --checkpoint-dir models/mis_checkpoints \
+    --checkpoint-filename mejor_modelo.keras \
+    --epochs 50
+```
+
+**6. Entrenamiento forzando uso de CPU:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --no-cuda \
+    --batch-size 16
+```
+
+**7. Entrenamiento completo con todos los parámetros:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --dataset-path data/processed/eyepacs_dataset \
+    --batch-size 64 \
+    --epochs 100 \
+    --learning-rate 0.0001 \
+    --beta-1 0.9 \
+    --beta-2 0.999 \
+    --epsilon 1e-7 \
+    --weight-decay 0.0 \
+    --num-classes 5 \
+    --validation-freq 1 \
+    --verbose 1 \
+    --checkpoint-dir models/checkpoints \
+    --checkpoint-filename best_model.keras
+```
+
+#### Parámetros Disponibles
+
+**Parámetros del Dataset:**
+- `--dataset-path`: Ruta al directorio del dataset procesado (por defecto: `data/processed/eyepacs_dataset`)
+- `--dataset-name`: Nombre del directorio del dataset (por defecto: `eyepacs_dataset`)
+- `--batch-size`: Tamaño del batch para entrenamiento (por defecto: `32`)
+
+**Parámetros de Entrenamiento:**
+- `--epochs`: Número de épocas de entrenamiento (por defecto: `50`)
+- `--validation-freq`: Frecuencia de validación (por defecto: `1`, valida cada época)
+- `--verbose`: Nivel de verbosidad (por defecto: `1`)
+  - `0`: Silencioso
+  - `1`: Barra de progreso
+  - `2`: Una línea por época
+
+**Hiperparámetros del Optimizador Adam:**
+- `--learning-rate`: Tasa de aprendizaje (por defecto: `0.001`)
+- `--beta-1`: Tasa de decaimiento exponencial para estimaciones del primer momento (por defecto: `0.9`)
+- `--beta-2`: Tasa de decaimiento exponencial para estimaciones del segundo momento (por defecto: `0.999`)
+- `--epsilon`: Constante pequeña para estabilidad numérica (por defecto: `1e-7`)
+- `--weight-decay`: Coeficiente de weight decay (por defecto: `0.0`)
+  - **Nota**: TensorFlow/Keras Adam no soporta weight_decay directamente. Este parámetro está incluido para uso futuro o wrappers personalizados.
+
+**Parámetros del Modelo:**
+- `--num-classes`: Número de clases de salida (por defecto: `5`)
+
+**Parámetros de Checkpoints:**
+- `--checkpoint-dir`: Directorio para guardar checkpoints (por defecto: `models/checkpoints`)
+- `--checkpoint-filename`: Nombre del archivo de checkpoint (por defecto: `best_model.keras`)
+
+**Parámetros de CUDA:**
+- `--use-cuda`: Forzar uso de CUDA (si está disponible)
+- `--no-cuda`: Forzar uso de CPU (deshabilitar CUDA)
+
+#### Uso Programático
+
+También puedes usar el script de entrenamiento programáticamente:
+
+```python
+from pathlib import Path
+from sam_ml.modeling.train import train
+
+# Entrenar con parámetros personalizados
+history = train(
+    epochs=100,
+    batch_size=64,
+    learning_rate=0.0001,
+    beta_1=0.9,
+    beta_2=0.999,
+    epsilon=1e-7,
+    weight_decay=0.0,
+    checkpoint_dir=Path("models/checkpoints"),
+    checkpoint_filename="mi_modelo.keras",
+)
+
+# El historial de entrenamiento contiene las métricas
+print(history.history)
+```
+
+#### Características del Script de Entrenamiento
+
+- **Detección automática de CUDA**: Verifica y configura GPU automáticamente si está disponible
+- **Callbacks integrados**: 
+  - Early Stopping para evitar sobreentrenamiento
+  - Model Checkpoint para guardar el mejor modelo
+  - Reduce Learning Rate on Plateau para ajustar la tasa de aprendizaje
+- **Logging detallado**: Muestra configuración de entrenamiento y progreso
+- **Validación automática**: Valida el modelo en el conjunto de validación
+- **Evaluación en test**: Evalúa automáticamente en el conjunto de test al finalizar
+
+#### Ver Ayuda Completa
+
+Para ver todos los argumentos disponibles y sus descripciones:
+
+```bash
+uv run python -m sam_ml.modeling.train --help
+```
+
+### English
+
+The project includes a complete training script with support for configurable hyperparameters via command-line arguments.
+
+#### Quick Start
+
+Train the model with default values:
+
+```bash
+# Train with default configuration
+uv run python -m sam_ml.modeling.train
+```
+
+#### Usage Examples
+
+**1. Basic training with default values:**
+
+```bash
+uv run python -m sam_ml.modeling.train
+```
+
+**2. Training with custom learning rate:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --learning-rate 0.0001 \
+    --epochs 100
+```
+
+**3. Training with custom hyperparameters:**
+
+```bash
+uv run python -m sam_ml.modeling.train \
+    --learning-rate 0.0001 \
+    --beta-1 0.95 \
+    --beta-2 0.99 \
+    --epsilon 1e-8 \
+    --weight-decay 1e-4 \
+    --batch-size 64 \
+    --epochs 100
+```
+
+For complete documentation, see the Spanish section above or run:
+
+```bash
+uv run python -m sam_ml.modeling.train --help
+```
+
 ## Project Overview
 
 SAM-AI implements a dual-channel weighted fusion deep learning model for diabetic retinopathy detection, based on the research paper listed in [References](#references).
