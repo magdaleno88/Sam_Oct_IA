@@ -29,6 +29,9 @@ def check_cuda_availability() -> bool:
     """
     Check if CUDA is available and properly configured.
     
+    This function not only checks for GPU availability but also configures
+    TensorFlow to use GPUs explicitly.
+    
     Returns:
         True if CUDA is available and can be used, False otherwise
         
@@ -54,15 +57,31 @@ def check_cuda_availability() -> bool:
             )
             return False
         
+        # Explicitly set visible devices to GPUs
+        try:
+            tf.config.set_visible_devices(gpus, "GPU")
+            logger.info(f"Set visible GPU devices: {[gpu.name for gpu in gpus]}")
+        except RuntimeError as e:
+            logger.warning(f"Could not set visible GPU devices: {e}")
+        
         # Configure GPU memory growth to avoid allocating all memory at once
         for gpu in gpus:
             try:
                 tf.config.experimental.set_memory_growth(gpu, True)
-                logger.info(f"Configured GPU: {gpu.name}")
+                logger.info(f"Configured GPU memory growth: {gpu.name}")
             except RuntimeError as e:
-                logger.warning(f"Could not configure GPU {gpu.name}: {e}")
+                logger.warning(f"Could not configure GPU memory growth for {gpu.name}: {e}")
         
-        logger.info(f"CUDA is available. Found {len(gpus)} GPU(s).")
+        # Verify GPU is accessible by checking logical devices
+        logical_gpus = tf.config.list_logical_devices("GPU")
+        if len(logical_gpus) > 0:
+            logger.info(f"CUDA is available. Found {len(gpus)} physical GPU(s) and {len(logical_gpus)} logical GPU(s).")
+            for i, logical_gpu in enumerate(logical_gpus):
+                logger.info(f"  Logical GPU {i}: {logical_gpu.name}")
+        else:
+            logger.warning("GPUs detected but no logical devices available. This may indicate a configuration issue.")
+            return False
+        
         return True
         
     except Exception as e:
@@ -392,6 +411,30 @@ def train(
         metrics=metrics,
     )
     
+    # Verify GPU usage after compilation
+    if use_cuda:
+        # Check which devices are available and verify GPU placement
+        try:
+            logical_gpus = tf.config.list_logical_devices("GPU")
+            physical_gpus = tf.config.list_physical_devices("GPU")
+            
+            if len(logical_gpus) > 0:
+                logger.info(f"GPU devices available for training:")
+                for i, gpu in enumerate(logical_gpus):
+                    logger.info(f"  - {gpu.name}")
+                logger.info(f"Total: {len(physical_gpus)} physical GPU(s), {len(logical_gpus)} logical GPU(s)")
+                
+                # Test GPU placement with a simple operation
+                with tf.device("/GPU:0"):
+                    test_tensor = tf.constant([1.0, 2.0, 3.0])
+                    test_result = tf.reduce_sum(test_tensor)
+                    device_used = test_result.device
+                    logger.info(f"GPU placement test: Operations will run on {device_used}")
+            else:
+                logger.warning("GPU was requested but no logical GPU devices found. Model may run on CPU.")
+        except Exception as e:
+            logger.warning(f"Could not verify GPU device placement: {e}")
+    
     # Create callbacks if not provided
     if callbacks is None:
         if checkpoint_dir is None:
@@ -422,21 +465,56 @@ def train(
     
     # Train model
     logger.info("Starting training...")
-    history = model.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        epochs=epochs,
-        callbacks=callbacks,
-        validation_freq=validation_freq,
-        verbose=verbose,
-    )
+    
+    # Use GPU device scope if CUDA is available
+    if use_cuda:
+        logical_gpus = tf.config.list_logical_devices("GPU")
+        if len(logical_gpus) > 0:
+            logger.info(f"Training with GPU device scope: {logical_gpus[0].name}")
+            with tf.device(logical_gpus[0].name):
+                history = model.fit(
+                    train_dataset,
+                    validation_data=val_dataset,
+                    epochs=epochs,
+                    callbacks=callbacks,
+                    validation_freq=validation_freq,
+                    verbose=verbose,
+                )
+        else:
+            logger.warning("CUDA requested but no logical GPU devices found. Training on CPU.")
+            history = model.fit(
+                train_dataset,
+                validation_data=val_dataset,
+                epochs=epochs,
+                callbacks=callbacks,
+                validation_freq=validation_freq,
+                verbose=verbose,
+            )
+    else:
+        # Train on CPU
+        history = model.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=epochs,
+            callbacks=callbacks,
+            validation_freq=validation_freq,
+            verbose=verbose,
+        )
     
     logger.info("Training completed!")
     
     # Evaluate on test set if provided
     if test_dataset is not None:
         logger.info("Evaluating on test set...")
-        test_results = model.evaluate(test_dataset, verbose=verbose)
+        if use_cuda:
+            logical_gpus = tf.config.list_logical_devices("GPU")
+            if len(logical_gpus) > 0:
+                with tf.device(logical_gpus[0].name):
+                    test_results = model.evaluate(test_dataset, verbose=verbose)
+            else:
+                test_results = model.evaluate(test_dataset, verbose=verbose)
+        else:
+            test_results = model.evaluate(test_dataset, verbose=verbose)
         logger.info(f"Test results: {dict(zip(model.metrics_names, test_results))}")
     
     return history
@@ -572,12 +650,22 @@ def main() -> None:
     """
     args = parse_args()
     
-    # Determine CUDA usage
+    # Determine CUDA usage and configure early
     use_cuda: Optional[bool] = None
     if args.use_cuda:
         use_cuda = True
     elif args.no_cuda:
         use_cuda = False
+    
+    # Configure GPU early, before any TensorFlow operations
+    if use_cuda is not False:  # Only check if not explicitly disabled
+        logger.info("Checking CUDA availability...")
+        cuda_available = check_cuda_availability()
+        if use_cuda is None:
+            use_cuda = cuda_available
+        elif use_cuda and not cuda_available:
+            logger.warning("CUDA was requested but not available. Falling back to CPU.")
+            use_cuda = False
     
     # Prepare dataset loading kwargs
     dataset_kwargs: Dict[str, Any] = {

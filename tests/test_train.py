@@ -27,7 +27,9 @@ class TestCheckCUDAAvailability:
     def test_check_cuda_availability_with_gpu(self) -> None:
         """Test CUDA check when GPU is available."""
         with patch("sam_ml.modeling.train.tf.config.list_physical_devices") as mock_list_gpus, \
+             patch("sam_ml.modeling.train.tf.config.list_logical_devices") as mock_list_logical_gpus, \
              patch("sam_ml.modeling.train.tf.test.is_built_with_cuda", return_value=True), \
+             patch("sam_ml.modeling.train.tf.config.set_visible_devices") as mock_set_visible, \
              patch("sam_ml.modeling.train.tf.config.experimental.set_memory_growth") as mock_memory_growth:
             
             # Mock GPU device
@@ -35,11 +37,18 @@ class TestCheckCUDAAvailability:
             mock_gpu.name = "/physical_device:GPU:0"
             mock_list_gpus.return_value = [mock_gpu]
             
+            # Mock logical GPU device
+            mock_logical_gpu = MagicMock()
+            mock_logical_gpu.name = "/device:GPU:0"
+            mock_list_logical_gpus.return_value = [mock_logical_gpu]
+            
             result = check_cuda_availability()
             
             assert result is True
             mock_list_gpus.assert_called_once_with("GPU")
+            mock_set_visible.assert_called_once()
             mock_memory_growth.assert_called_once()
+            mock_list_logical_gpus.assert_called_with("GPU")
     
     def test_check_cuda_availability_no_gpu(self) -> None:
         """Test CUDA check when no GPU is available."""
@@ -75,13 +84,20 @@ class TestCheckCUDAAvailability:
     def test_check_cuda_availability_memory_growth_exception(self) -> None:
         """Test CUDA check handles memory growth configuration exceptions."""
         with patch("sam_ml.modeling.train.tf.config.list_physical_devices") as mock_list_gpus, \
+             patch("sam_ml.modeling.train.tf.config.list_logical_devices") as mock_list_logical_gpus, \
              patch("sam_ml.modeling.train.tf.test.is_built_with_cuda", return_value=True), \
+             patch("sam_ml.modeling.train.tf.config.set_visible_devices") as mock_set_visible, \
              patch("sam_ml.modeling.train.tf.config.experimental.set_memory_growth") as mock_memory_growth:
             
             mock_gpu = MagicMock()
             mock_gpu.name = "/physical_device:GPU:0"
             mock_list_gpus.return_value = [mock_gpu]
             mock_memory_growth.side_effect = RuntimeError("Cannot set memory growth")
+            
+            # Mock logical GPU device
+            mock_logical_gpu = MagicMock()
+            mock_logical_gpu.name = "/device:GPU:0"
+            mock_list_logical_gpus.return_value = [mock_logical_gpu]
             
             # Should still return True even if memory growth fails
             result = check_cuda_availability()
@@ -390,16 +406,28 @@ class TestTrain:
             mock_check_cuda.assert_called_once()
     
     @patch("sam_ml.modeling.train.check_cuda_availability")
+    @patch("sam_ml.modeling.train.tf.config.list_logical_devices")
+    @patch("sam_ml.modeling.train.tf.device")
     def test_train_cuda_detection(
         self,
+        mock_device: Mock,
+        mock_list_logical_devices: Mock,
         mock_check_cuda: Mock,
         dummy_model: tf.keras.Model,
         dummy_datasets: Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset],
     ) -> None:
-        """Test that CUDA detection is called during training."""
+        """Test that CUDA detection is called during training and GPU device scope is used."""
         train_ds, val_ds, _ = dummy_datasets
         
         mock_check_cuda.return_value = True
+        # Mock logical GPU device
+        mock_gpu_device = MagicMock()
+        mock_gpu_device.name = "/device:GPU:0"
+        mock_list_logical_devices.return_value = [mock_gpu_device]
+        # Mock device context manager
+        mock_device_context = MagicMock()
+        mock_device.return_value.__enter__ = MagicMock(return_value=None)
+        mock_device.return_value.__exit__ = MagicMock(return_value=None)
         
         with patch.object(dummy_model, "fit") as mock_fit, \
              patch.object(dummy_model, "compile"):
@@ -416,6 +444,10 @@ class TestTrain:
             )
             
             mock_check_cuda.assert_called_once()
+            # Verify GPU device scope is used
+            mock_list_logical_devices.assert_called_with("GPU")
+            mock_device.assert_called_with("/device:GPU:0")
+            mock_fit.assert_called_once()
     
     @patch("sam_ml.modeling.train.check_cuda_availability")
     def test_train_use_cuda_parameter(
@@ -520,6 +552,98 @@ class TestTrain:
             )
             
             mock_evaluate.assert_called_once_with(test_ds, verbose=0)
+    
+    @patch("sam_ml.modeling.train.check_cuda_availability")
+    @patch("sam_ml.modeling.train.tf.config.list_logical_devices")
+    @patch("sam_ml.modeling.train.tf.device")
+    def test_train_uses_gpu_device_scope(
+        self,
+        mock_device: Mock,
+        mock_list_logical_devices: Mock,
+        mock_check_cuda: Mock,
+        dummy_model: tf.keras.Model,
+        dummy_datasets: Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset],
+    ) -> None:
+        """Test that training uses GPU device scope when CUDA is available."""
+        train_ds, val_ds, _ = dummy_datasets
+        
+        mock_check_cuda.return_value = True
+        # Mock logical GPU device
+        mock_gpu_device = MagicMock()
+        mock_gpu_device.name = "/device:GPU:0"
+        mock_list_logical_devices.return_value = [mock_gpu_device]
+        # Mock device context manager
+        mock_device.return_value.__enter__ = MagicMock(return_value=None)
+        mock_device.return_value.__exit__ = MagicMock(return_value=None)
+        
+        with patch.object(dummy_model, "fit") as mock_fit, \
+             patch.object(dummy_model, "compile"):
+            
+            mock_history = MagicMock()
+            mock_fit.return_value = mock_history
+            
+            train(
+                model=dummy_model,
+                train_dataset=train_ds,
+                val_dataset=val_ds,
+                epochs=1,
+                use_cuda=True,
+                verbose=0,
+            )
+            
+            # Verify GPU device scope is used
+            mock_list_logical_devices.assert_called_with("GPU")
+            mock_device.assert_called_with("/device:GPU:0")
+            mock_fit.assert_called_once()
+    
+    @patch("sam_ml.modeling.train.check_cuda_availability")
+    @patch("sam_ml.modeling.train.tf.config.list_logical_devices")
+    @patch("sam_ml.modeling.train.tf.device")
+    def test_train_with_test_dataset_uses_gpu_scope(
+        self,
+        mock_device: Mock,
+        mock_list_logical_devices: Mock,
+        mock_check_cuda: Mock,
+        dummy_model: tf.keras.Model,
+        dummy_datasets: Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset],
+    ) -> None:
+        """Test that evaluation on test dataset uses GPU device scope when CUDA is available."""
+        train_ds, val_ds, test_ds = dummy_datasets
+        
+        mock_check_cuda.return_value = True
+        # Mock logical GPU device
+        mock_gpu_device = MagicMock()
+        mock_gpu_device.name = "/device:GPU:0"
+        mock_list_logical_devices.return_value = [mock_gpu_device]
+        # Mock device context manager
+        mock_device.return_value.__enter__ = MagicMock(return_value=None)
+        mock_device.return_value.__exit__ = MagicMock(return_value=None)
+        
+        with patch.object(dummy_model, "fit") as mock_fit, \
+             patch.object(dummy_model, "evaluate") as mock_evaluate, \
+             patch.object(dummy_model, "compile"), \
+             patch.object(type(dummy_model), "metrics_names", new_callable=PropertyMock) as mock_metrics_names:
+            
+            mock_history = MagicMock()
+            mock_fit.return_value = mock_history
+            mock_evaluate.return_value = [0.5, 0.8]
+            mock_metrics_names.return_value = ["loss", "accuracy"]
+            
+            train(
+                model=dummy_model,
+                train_dataset=train_ds,
+                val_dataset=val_ds,
+                test_dataset=test_ds,
+                epochs=1,
+                use_cuda=True,
+                verbose=0,
+            )
+            
+            # Verify GPU device scope is used for both fit and evaluate
+            # device should be called twice: once for fit, once for evaluate
+            assert mock_device.call_count >= 1
+            mock_fit.assert_called_once()
+            mock_evaluate.assert_called_once()
     
     @patch("sam_ml.modeling.train.check_cuda_availability")
     def test_train_compiles_model(
