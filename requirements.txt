@@ -1,0 +1,27 @@
+# Requirements for SAM-AI Project
+# For Paperspace GPU environments with CUDA support
+
+# TensorFlow with CUDA support (for GPU acceleration on Paperspace)
+tensorflow[and-cuda]==2.16.2
+
+# NumPy (TensorFlow 2.16.2 requires numpy<2.0)
+numpy<2.0
+
+# Computer vision and image processing
+opencv-python>=4.8.0,<4.11.0
+pillow>=10.0.0
+
+# Data handling
+datasets>=4.4.1
+
+# Utilities
+tqdm>=4.66.0
+
+# Jupyter notebook dependencies
+jupyter>=1.0.0
+matplotlib>=3.8.0
+
+# Testing dependencies (optional, uncomment if needed)
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+

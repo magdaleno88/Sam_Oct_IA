@@ -334,14 +334,26 @@ def _create_paired_dataset(
     paired_ds = tf.data.Dataset.zip((tf.data.Dataset.zip((clahe_ds, ceced_ds)), labels_ds))
     
     # Shuffle if requested
+    # Use a balanced buffer size for good shuffling quality while maintaining memory efficiency
+    # A buffer of 2,000-3,000 provides excellent shuffling without excessive memory usage
+    # This is a good compromise: better randomization than 1,000, but still memory-efficient
     if shuffle:
-        buffer_size = len(clahe_files)
-        paired_ds = paired_ds.shuffle(buffer_size=buffer_size, seed=seed)
+        # Balanced buffer size: 2000 samples
+        # - Provides good randomization quality (better than 1,000)
+        # - Still memory-efficient (much better than 10,000+)
+        # - For datasets smaller than 2,000, uses the full dataset size
+        buffer_size = min(2000, len(clahe_files))
+        paired_ds = paired_ds.shuffle(buffer_size=buffer_size, seed=seed, reshuffle_each_iteration=True)
     
-    # Batch
+    # Batch before other optimizations
+    # Batching reduces the number of elements and makes subsequent operations more efficient
     paired_ds = paired_ds.batch(batch_size)
     
-    # Optimize
+    # Prefetch for better performance (overlaps data loading with model execution)
+    # Note: We don't cache here because:
+    # 1. Image datasets are too large to cache in memory efficiently
+    # 2. Cache should be applied after batching if needed, but for large datasets
+    #    it's better to rely on prefetch and file system caching
     paired_ds = paired_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
     
     return paired_ds
@@ -464,11 +476,24 @@ def load_eyepacs_dual_channel(
         seed=seed,
     )
     
-    # Apply caching if requested
+    # Apply optimizations
+    # Simple, effective strategy based on dataset characteristics:
+    # 
+    # 1. Training set: NO cache - Large dataset (24K+ images), shuffled each epoch.
+    #    - Prefetch is sufficient for efficient I/O
+    #    - Caching doesn't help because: first epoch still reads from disk,
+    #      shuffling changes order each epoch, and adds complexity/lockfile issues
+    # 
+    # 2. Validation/Test sets: Memory cache - Small datasets (~5K samples), reused frequently
+    #    - Significant performance benefit with minimal memory cost
+    #    - Read multiple times per epoch (validation) or multiple evaluations (test)
+    # 
+    # 3. Prefetch: Always enabled - Overlaps I/O with computation for all datasets
     if cache:
-        train = train.cache()
+        # Only cache validation and test sets (small, reused frequently)
         val = val.cache()
         test = test.cache()
+        # Training set: No cache - rely on prefetch and OS file system caching
     
     if prefetch:
         train = train.prefetch(buffer_size=tf.data.AUTOTUNE)
