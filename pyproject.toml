@@ -5,16 +5,21 @@ build-backend = "uv_build"
 [project]
 name = "sam-ai"
 # Note: Package name in code is sam_ml
-version = "0.1.0"
+version = "0.0.1"
 description = "A computer vision project to aid in the diagnosis of diabetic retinopathy."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "tensorflow==2.16.2",
     "opencv-python>=4.8.0,<4.11.0", # Compatible with numpy<2.0 (required by tensorflow 2.16.2)
-    "datasets>=4.4.1",
     "pillow>=10.0.0", # Required for PIL Image support (used by datasets library)
     "tqdm>=4.66.0", # Progress bars for long-running operations
+    # PyTorch: Pin to 2.2.0 for macOS Intel (x86_64) compatibility
+    # PyTorch 2.3.0+ no longer provides macOS Intel wheels
+    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torchvision==0.17.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # For other platforms (ARM64 Mac, Linux, Windows), allow newer versions
+    "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torchvision>=0.17.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [project.scripts]
@@ -36,21 +41,6 @@ test = [
 notebook = [
     "jupyter>=1.0.0",
     "matplotlib>=3.8.0",
-]
-
-# NVIDIA GPU support (CUDA)
-# Requires: NVIDIA GPU, CUDA Toolkit, cuDNN
-# Install with: uv sync --extra cuda
-cuda = [
-    "tensorflow[and-cuda]==2.16.2",
-]
-
-# Apple Silicon GPU support (MPS/Metal) - ARM64 only
-# Requires: macOS 12.0+, Apple Silicon (M1/M2/M3)
-# Install with: uv sync --extra mps
-# Note: Only works on Apple Silicon, not Intel Macs
-mps = [
-    "tensorflow-metal==1.2.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [tool.pytest.ini_options]
