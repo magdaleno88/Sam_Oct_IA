@@ -91,11 +91,11 @@ The project includes a preprocessing module for preparing diabetic retinopathy d
 Process the DDR2019 dataset using the CLI:
 
 ```bash
-# Process with default settings (keeps original image sizes)
+# Process with default settings (min-size=512, target-size=512x512)
 uv run preprocess-dataset ddr2019
 
-# Process with custom resize dimensions
-uv run preprocess-dataset ddr2019 --resize-shape 512 512
+# Process with custom minimum size and target size
+uv run preprocess-dataset ddr2019 --min-size 512 --target-size 512 512
 
 # Process with custom paths
 uv run preprocess-dataset ddr2019 \
@@ -106,8 +106,10 @@ uv run preprocess-dataset ddr2019 \
 
 ### Features
 
-- **Square Image Filtering**: Automatically filters out asymmetric (non-square) images
-- **Flexible Resizing**: Optionally resize images to a specified square size, or keep original sizes
+- **Minimum Size Filtering**: Only processes images with both dimensions >= 512x512
+- **Automatic Padding**: Non-square images are padded to square (black padding)
+- **No Upscaling**: Images are only downscaled or kept at same size (never upscaled to avoid noise)
+- **Standardized Output**: All processed images are resized to 512x512
 - **Label Synchronization**: CSV labels are automatically filtered to match processed images
 - **Original Data Protection**: Original dataset files are never modified
 
@@ -117,9 +119,14 @@ uv run preprocess-dataset ddr2019 \
 
 ### Preprocessing Behavior
 
-- **Default**: Images keep their original square size
-- **With `--resize-shape`**: Images are resized to the specified square dimensions
-- **Filtering**: Only square images (width == height) are processed; asymmetric images are skipped
+The preprocessing pipeline:
+
+1. **Filter by Minimum Size**: Only images with `width >= 512 AND height >= 512` are processed
+2. **Pad Non-Square Images**: Asymmetric images are padded with black pixels to make them square
+3. **Resize to Target Size**: All images are resized to 512x512 (downscaling only, never upscaling)
+4. **Filter Labels**: CSV labels are filtered to only include processed images
+
+**Important**: Images smaller than 512x512 are skipped to avoid upscaling, which would introduce noise.
 
 ### Output Structure
 
@@ -128,7 +135,7 @@ After preprocessing, the dataset will be organized as:
 ```
 data/processed/ddr2019/
 ├── images/
-│   ├── 20170413102628830.jpg
+│   ├── 20170413102628830.jpg  (all 512x512)
 │   └── ...
 └── labels.csv
 ```
@@ -136,6 +143,22 @@ data/processed/ddr2019/
 The `labels.csv` file contains:
 - `filename`: Image filename
 - `label`: Diagnosis label (0-4)
+
+### Processing Statistics
+
+At the end of preprocessing, the script prints:
+- **Original dataset**: Total number of images in the raw dataset
+- **Processed dataset**: Number of images successfully processed
+- **Images skipped**: Number of images that were too small or would require upscaling
+
+Example output:
+```
+Preprocessing complete for ddr2019:
+  - Original dataset: 12524 images
+  - Processed dataset: 12524 images
+  - Images skipped: 0 images (too small or would require upscaling)
+  - Labels saved to: data/processed/ddr2019/labels.csv
+```
 
 For detailed usage instructions, see [Preprocessing Documentation](sam_ml/preprocessing/README.md).
 

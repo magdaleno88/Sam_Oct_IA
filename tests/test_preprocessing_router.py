@@ -69,8 +69,8 @@ class TestPreprocessingRouter:
         assert (processed_dir / "images").exists()
         assert (processed_dir / "labels.csv").exists()
     
-    def test_main_ddr2019_with_resize(self, temp_dir, sample_images_dir, sample_csv_file):
-        """Test DDR2019 preprocessing with custom resize shape."""
+    def test_main_ddr2019_with_target_size(self, temp_dir, sample_images_dir, sample_csv_file):
+        """Test DDR2019 preprocessing with custom target size."""
         processed_dir = Path(temp_dir) / "processed"
         
         exit_code = main([
@@ -78,7 +78,7 @@ class TestPreprocessingRouter:
             "--raw-img-dir", sample_images_dir,
             "--raw-csv-path", sample_csv_file,
             "--processed-dir", str(processed_dir),
-            "--resize-shape", "256", "256",
+            "--target-size", "256", "256",
         ])
         
         assert exit_code == 0
@@ -88,6 +88,31 @@ class TestPreprocessingRouter:
         for img_file in images_dir.glob("*.jpg"):
             img = Image.open(img_file)
             assert img.size == (256, 256)
+    
+    def test_main_ddr2019_with_min_size(self, temp_dir, sample_images_dir, sample_csv_file):
+        """Test DDR2019 preprocessing with custom minimum size."""
+        processed_dir = Path(temp_dir) / "processed"
+        
+        exit_code = main([
+            "ddr2019",
+            "--raw-img-dir", sample_images_dir,
+            "--raw-csv-path", sample_csv_file,
+            "--processed-dir", str(processed_dir),
+            "--min-size", "600",
+            "--target-size", "512", "512",
+        ])
+        
+        assert exit_code == 0
+        
+        # Verify images are processed (800x600 >= 600x600)
+        images_dir = processed_dir / "images"
+        image_files = list(images_dir.glob("*.jpg"))
+        assert len(image_files) == 3  # All 3 images are >= 600
+        
+        # Verify all are resized to 512x512
+        for img_file in image_files:
+            img = Image.open(img_file)
+            assert img.size == (512, 512)
     
     def test_main_ddr2019_default_paths(self, temp_dir):
         """Test DDR2019 preprocessing with default paths (requires actual data)."""
@@ -139,7 +164,8 @@ class TestPreprocessingRouter:
         assert "Preprocess datasets for SAM-AI project" in captured.out
         assert "ddr2019" in captured.out
         assert "--raw-img-dir" in captured.out
-        assert "--resize-shape" in captured.out
+        assert "--min-size" in captured.out
+        assert "--target-size" in captured.out
     
     def test_main_example_usage(self, temp_dir, sample_images_dir, sample_csv_file):
         """Test example usage from help message."""
@@ -157,14 +183,14 @@ class TestPreprocessingRouter:
         assert (processed_dir / "images").exists()
         assert (processed_dir / "labels.csv").exists()
         
-        # Test example: preprocess-dataset ddr2019 --resize-shape 256 256
+        # Test example: preprocess-dataset ddr2019 --target-size 256 256
         processed_dir2 = Path(temp_dir) / "processed2"
         exit_code = main([
             "ddr2019",
             "--raw-img-dir", sample_images_dir,
             "--raw-csv-path", sample_csv_file,
             "--processed-dir", str(processed_dir2),
-            "--resize-shape", "256", "256",
+            "--target-size", "256", "256",
         ])
         
         assert exit_code == 0

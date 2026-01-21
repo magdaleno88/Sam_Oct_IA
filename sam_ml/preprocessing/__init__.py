@@ -23,7 +23,7 @@ def main(args: Optional[list[str]] = None) -> int:
 Examples:
   preprocess-dataset ddr2019
   preprocess-dataset ddr2019 --raw-img-dir /path/to/images
-  preprocess-dataset ddr2019 --resize-shape 256 256
+  preprocess-dataset ddr2019 --min-size 512 --target-size 512 512
         """,
     )
     
@@ -52,11 +52,19 @@ Examples:
     )
     
     parser.add_argument(
-        "--resize-shape",
+        "--min-size",
+        type=int,
+        default=512,
+        help="Minimum size (width and height) required to process an image. Defaults to 512.",
+    )
+    
+    parser.add_argument(
+        "--target-size",
         type=int,
         nargs=2,
         metavar=("WIDTH", "HEIGHT"),
-        help="Target size for image resizing (width height). If not specified, images keep their original size.",
+        default=[512, 512],
+        help="Target size for image resizing (width height). Defaults to 512 512.",
     )
     
     if args is None:
@@ -76,14 +84,27 @@ Examples:
             kwargs["raw_csv_path"] = parsed_args.raw_csv_path
         if parsed_args.processed_dir:
             kwargs["processed_dir"] = parsed_args.processed_dir
-        if parsed_args.resize_shape:
-            kwargs["resize_shape"] = tuple(parsed_args.resize_shape)
+        kwargs["min_size"] = parsed_args.min_size
+        kwargs["target_size"] = tuple(parsed_args.target_size)
         
         try:
             print(f"Starting preprocessing for dataset: {parsed_args.dataset}")
+            
+            # Count original images before processing
+            from pathlib import Path
+            raw_img_dir = kwargs.get("raw_img_dir") or "data/raw/ddr2019/DR_grading/DR_grading"
+            raw_path = Path(raw_img_dir)
+            if raw_path.exists():
+                original_image_count = len(list(raw_path.glob("*.jpg")))
+            else:
+                original_image_count = 0
+            
             results = preprocess_ddr2019(**kwargs)
+            
             print(f"\nPreprocessing complete for {parsed_args.dataset}:")
-            print(f"  - Images processed: {results['images_processed']}")
+            print(f"  - Original dataset: {original_image_count} images")
+            print(f"  - Processed dataset: {results['images_processed']} images")
+            print(f"  - Images skipped: {original_image_count - results['images_processed']} images (too small or would require upscaling)")
             print(f"  - Labels saved to: {results['labels_path']}")
             return 0
         except Exception as e:

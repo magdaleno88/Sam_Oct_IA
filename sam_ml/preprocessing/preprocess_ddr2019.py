@@ -1,8 +1,10 @@
 """Preprocessing script for DDR2019 dataset.
 
 This script processes the raw DDR2019 dataset by:
-1. Resizing and copying images from raw to processed directory
-2. Converting the label CSV to the standard format (filename, label)
+1. Filtering images by minimum size (>= 512x512)
+2. Adding padding to non-square images to make them square
+3. Resizing all images to 512x512
+4. Converting the label CSV to the standard format (filename, label)
 """
 
 import os
@@ -19,22 +21,66 @@ RAW_IMG_DIR = "data/raw/ddr2019/DR_grading/DR_grading"
 RAW_CSV_PATH = "data/raw/ddr2019/DR_grading.csv"
 PROCESSED_DIR = "data/processed/ddr2019"
 RESIZED_IMG_DIR = os.path.join(PROCESSED_DIR, "images")
+MIN_SIZE = 512
+TARGET_SIZE = (512, 512)
+
+
+def add_padding_to_square(img: Image.Image) -> Image.Image:
+    """Add padding to make an image square.
+    
+    Pads the smaller dimension (width or height) to match the larger one.
+    Uses black padding (RGB 0, 0, 0).
+    
+    Args:
+        img: PIL Image to pad.
+    
+    Returns:
+        Square PIL Image with padding added.
+    """
+    width, height = img.size
+    
+    # If already square, return as is
+    if width == height:
+        return img
+    
+    # Determine the target square size (max of width and height)
+    target_size = max(width, height)
+    
+    # Create a new square image with black background
+    square_img = Image.new("RGB", (target_size, target_size), color=(0, 0, 0))
+    
+    # Calculate padding offsets to center the image
+    if width < height:
+        # Pad horizontally (left and right)
+        x_offset = (target_size - width) // 2
+        y_offset = 0
+    else:
+        # Pad vertically (top and bottom)
+        x_offset = 0
+        y_offset = (target_size - height) // 2
+    
+    # Paste the original image onto the square canvas
+    square_img.paste(img, (x_offset, y_offset))
+    
+    return square_img
 
 
 def resize_and_copy_images(
     raw_img_dir: Optional[str] = None,
     resized_img_dir: Optional[str] = None,
-    resize_shape: Optional[tuple[int, int]] = None,
+    min_size: int = MIN_SIZE,
+    target_size: tuple[int, int] = TARGET_SIZE,
 ) -> tuple[int, set[str]]:
     """Resize and copy images from raw directory to processed directory.
     
-    Only processes square images (width == height). Asymmetric images are skipped.
-    By default, images keep their original size unless resize_shape is specified.
+    Only processes images with both dimensions >= min_size. Smaller images are skipped.
+    Non-square images are padded to make them square, then all images are resized to target_size.
     
     Args:
         raw_img_dir: Path to raw images directory. Defaults to RAW_IMG_DIR.
         resized_img_dir: Path to output directory for resized images. Defaults to RESIZED_IMG_DIR.
-        resize_shape: Target size (width, height) for resizing. If None, keeps original size.
+        min_size: Minimum size (width and height) required to process an image. Defaults to 512.
+        target_size: Target size (width, height) for resizing. Defaults to (512, 512).
     
     Returns:
         Tuple of (number of images processed, set of processed filenames).
@@ -64,27 +110,39 @@ def resize_and_copy_images(
     
     processed_count = 0
     processed_filenames = set()
-    skipped_count = 0
+    skipped_small_count = 0
     
     # Process each image with progress bar
-    desc = "Resizing images" if resize_shape else "Copying images"
-    for img_file in tqdm(image_files, desc=desc):
+    for img_file in tqdm(image_files, desc="Processing images"):
         try:
             # Open and convert to RGB (handles RGBA, grayscale, etc.)
             img = Image.open(img_file).convert("RGB")
             
-            # Check if image is square (width == height)
+            # Check minimum size requirement - only process images >= min_size
+            # This ensures we never upscale (which would add noise)
+            # We only downscale or keep same size, never upscale
             width, height = img.size
-            if width != height:
-                # Skip asymmetric images
-                skipped_count += 1
+            if width < min_size or height < min_size:
+                # Skip images smaller than minimum size to avoid upscaling noise
+                skipped_small_count += 1
                 continue
             
-            # Resize image if resize_shape is provided, otherwise keep original size
-            if resize_shape is not None:
-                img_processed = img.resize(resize_shape, Image.Resampling.LANCZOS)
-            else:
-                img_processed = img
+            # Add padding if image is not square
+            # After padding, the image will be square with size = max(width, height)
+            if width != height:
+                img = add_padding_to_square(img)
+            
+            # Verify that after padding, we won't need to upscale
+            # The image (after padding) must be >= target_size to avoid upscaling
+            current_width, current_height = img.size
+            if current_width < target_size[0] or current_height < target_size[1]:
+                # Skip this image - it would require upscaling which adds noise
+                skipped_small_count += 1
+                continue
+            
+            # Resize to target size
+            # At this point, we're guaranteed to be downscaling or keeping same size (never upscaling)
+            img_processed = img.resize(target_size, Image.Resampling.LANCZOS)
             
             # Save to output directory
             output_file = output_path / img_file.name
@@ -96,8 +154,8 @@ def resize_and_copy_images(
             print(f"Warning: Failed to process {img_file.name}: {e}")
             continue
     
-    if skipped_count > 0:
-        print(f"Info: Skipped {skipped_count} asymmetric (non-square) images")
+    if skipped_small_count > 0:
+        print(f"Info: Skipped {skipped_small_count} images smaller than {min_size}x{min_size}")
     
     return processed_count, processed_filenames
 
@@ -111,7 +169,7 @@ def convert_labels_csv(
     """Convert DDR2019 label CSV to standard format.
     
     Converts the CSV from format (id_code, diagnosis) to (filename, label).
-    Only includes labels for images that were actually processed (square images).
+    Only includes labels for images that were actually processed (size >= 512x512).
     
     Args:
         raw_csv_path: Path to input CSV file. Defaults to RAW_CSV_PATH.
@@ -151,13 +209,13 @@ def convert_labels_csv(
     # Ensure filename column contains strings (in case of numeric IDs)
     df["filename"] = df["filename"].astype(str)
     
-    # Filter to only include processed images (square images)
+    # Filter to only include processed images
     if processed_filenames is not None:
         original_count = len(df)
         df = df[df["filename"].isin(processed_filenames)].copy()
         filtered_count = original_count - len(df)
         if filtered_count > 0:
-            print(f"Info: Removed {filtered_count} labels for asymmetric/non-processed images")
+            print(f"Info: Removed {filtered_count} labels for non-processed images")
     
     # Create output directory if it doesn't exist
     output_dir = Path(processed_dir)
@@ -174,23 +232,25 @@ def preprocess_ddr2019(
     raw_img_dir: Optional[str] = None,
     raw_csv_path: Optional[str] = None,
     processed_dir: Optional[str] = None,
-    resize_shape: Optional[tuple[int, int]] = None,
+    min_size: int = MIN_SIZE,
+    target_size: tuple[int, int] = TARGET_SIZE,
 ) -> dict:
     """Run complete preprocessing pipeline for DDR2019 dataset.
     
-    Only processes square images (width == height). Asymmetric images are skipped
-    and their labels are removed from the output CSV.
-    By default, images keep their original size unless resize_shape is specified.
+    Only processes images with both dimensions >= min_size. Smaller images are skipped.
+    Non-square images are padded to make them square, then all images are resized to target_size.
+    Labels for non-processed images are removed from the output CSV.
     
     Args:
         raw_img_dir: Path to raw images directory. Defaults to RAW_IMG_DIR.
         raw_csv_path: Path to raw CSV file. Defaults to RAW_CSV_PATH.
         processed_dir: Output directory for processed data. Defaults to PROCESSED_DIR.
-        resize_shape: Target size for image resizing. If None, keeps original size.
+        min_size: Minimum size (width and height) required to process an image. Defaults to 512.
+        target_size: Target size for image resizing. Defaults to (512, 512).
     
     Returns:
         Dictionary with processing results:
-        - images_processed: Number of images processed (square images only)
+        - images_processed: Number of images processed (size >= min_size)
         - labels_path: Path to created labels.csv (only for processed images)
         - processed_filenames: Set of filenames that were processed
     """
@@ -199,11 +259,12 @@ def preprocess_ddr2019(
     
     resized_img_dir = os.path.join(processed_dir, "images")
     
-    # Process images (only square images)
+    # Process images (filter by min_size, pad non-square, resize to target_size)
     images_processed, processed_filenames = resize_and_copy_images(
         raw_img_dir=raw_img_dir,
         resized_img_dir=resized_img_dir,
-        resize_shape=resize_shape,
+        min_size=min_size,
+        target_size=target_size,
     )
     
     # Process labels (only for processed images)
@@ -222,7 +283,21 @@ def preprocess_ddr2019(
 
 if __name__ == "__main__":
     print("Starting DDR2019 preprocessing...")
+    print(f"  - Minimum size: {MIN_SIZE}x{MIN_SIZE}")
+    print(f"  - Target size: {TARGET_SIZE[0]}x{TARGET_SIZE[1]}")
+    
+    # Count original images before processing
+    raw_img_dir = RAW_IMG_DIR
+    raw_path = Path(raw_img_dir)
+    if raw_path.exists():
+        original_image_count = len(list(raw_path.glob("*.jpg")))
+    else:
+        original_image_count = 0
+    
     results = preprocess_ddr2019()
-    print(f"DDR2019 preprocessing complete.")
-    print(f"  - Images processed: {results['images_processed']}")
+    
+    print(f"\nDDR2019 preprocessing complete.")
+    print(f"  - Original dataset: {original_image_count} images")
+    print(f"  - Processed dataset: {results['images_processed']} images")
+    print(f"  - Images skipped: {original_image_count - results['images_processed']} images (too small or would require upscaling)")
     print(f"  - Labels saved to: {results['labels_path']}")

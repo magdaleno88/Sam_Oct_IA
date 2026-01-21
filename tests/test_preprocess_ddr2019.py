@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from sam_ml.preprocessing.preprocess_ddr2019 import (
+    add_padding_to_square,
     convert_labels_csv,
     preprocess_ddr2019,
     resize_and_copy_images,
@@ -26,15 +27,20 @@ def temp_dir():
 
 @pytest.fixture
 def sample_images_dir(temp_dir):
-    """Create a directory with sample test images (all square)."""
+    """Create a directory with sample test images (>= 512x512)."""
     img_dir = Path(temp_dir) / "raw_images"
     img_dir.mkdir(parents=True)
     
-    # Create 5 sample images with different square sizes
-    for i in range(5):
-        # Create square images
-        sizes = [(800, 800), (1024, 1024), (640, 640), (512, 512), (400, 400)]
-        img = Image.new("RGB", sizes[i], color=(i * 50, i * 50, i * 50))
+    # Create images: 3 >= 512x512 (will be processed), 2 < 512x512 (will be skipped)
+    sizes = [
+        (800, 800),   # Square, >= 512 - processed
+        (1024, 768),  # Non-square, >= 512 - processed (padded)
+        (512, 512),   # Square, exactly 512 - processed
+        (400, 400),   # Square, < 512 - skipped
+        (300, 500),   # Non-square, < 512 - skipped
+    ]
+    for i, size in enumerate(sizes):
+        img = Image.new("RGB", size, color=(i * 50, i * 50, i * 50))
         img.save(img_dir / f"test_image_{i:03d}.jpg", "JPEG")
     
     return str(img_dir)
@@ -42,19 +48,25 @@ def sample_images_dir(temp_dir):
 
 @pytest.fixture
 def mixed_images_dir(temp_dir):
-    """Create a directory with mixed square and non-square images."""
+    """Create a directory with mixed images (square, non-square, small)."""
     img_dir = Path(temp_dir) / "mixed_images"
     img_dir.mkdir(parents=True)
     
-    # Create 3 square images
-    for i in range(3):
-        img = Image.new("RGB", (512, 512), color=(i * 50, i * 50, i * 50))
+    # Create 2 square images >= 512
+    for i in range(2):
+        img = Image.new("RGB", (600, 600), color=(i * 50, i * 50, i * 50))
         img.save(img_dir / f"square_{i:03d}.jpg", "JPEG")
     
-    # Create 2 non-square (asymmetric) images
-    for i in range(2):
-        img = Image.new("RGB", (800, 600), color=(i * 50, i * 50, i * 50))
+    # Create 2 non-square images >= 512 (will be padded)
+    sizes = [(800, 600), (1024, 768)]
+    for i, size in enumerate(sizes):
+        img = Image.new("RGB", size, color=(i * 50, i * 50, i * 50))
         img.save(img_dir / f"asymmetric_{i:03d}.jpg", "JPEG")
+    
+    # Create 2 small images < 512 (will be skipped)
+    for i in range(2):
+        img = Image.new("RGB", (400, 300), color=(i * 50, i * 50, i * 50))
+        img.save(img_dir / f"small_{i:03d}.jpg", "JPEG")
     
     return str(img_dir)
 
@@ -64,7 +76,7 @@ def sample_csv_file(temp_dir):
     """Create a sample CSV file with labels."""
     csv_path = Path(temp_dir) / "DR_grading.csv"
     
-    # Create CSV matching the sample images
+    # Create CSV matching the sample images (all 5 images)
     data = {
         "id_code": [f"test_image_{i:03d}.jpg" for i in range(5)],
         "diagnosis": [0, 1, 2, 0, 1],
@@ -90,82 +102,151 @@ def sample_csv_file_mismatch(temp_dir):
     return str(csv_path)
 
 
+class TestAddPaddingToSquare:
+    """Tests for add_padding_to_square function."""
+    
+    def test_add_padding_horizontal(self):
+        """Test adding padding to make a wide image square."""
+        # Create a wide image (800x600)
+        img = Image.new("RGB", (800, 600), color=(255, 0, 0))
+        
+        padded = add_padding_to_square(img)
+        
+        assert padded.size == (800, 800)  # Should be square
+        assert padded.mode == "RGB"
+        # Check that original image is centered
+        # Top-left corner should be black (padding)
+        assert padded.getpixel((0, 0)) == (0, 0, 0)
+        # Center should have original image
+        assert padded.getpixel((400, 100)) == (255, 0, 0)
+    
+    def test_add_padding_vertical(self):
+        """Test adding padding to make a tall image square."""
+        # Create a tall image (600x800)
+        img = Image.new("RGB", (600, 800), color=(0, 255, 0))
+        
+        padded = add_padding_to_square(img)
+        
+        assert padded.size == (800, 800)  # Should be square
+        assert padded.mode == "RGB"
+        # Check that original image is centered
+        # Top-left corner should be black (padding)
+        assert padded.getpixel((0, 0)) == (0, 0, 0)
+        # Center should have original image
+        assert padded.getpixel((100, 400)) == (0, 255, 0)
+    
+    def test_add_padding_already_square(self):
+        """Test that square images are returned unchanged."""
+        img = Image.new("RGB", (512, 512), color=(0, 0, 255))
+        
+        padded = add_padding_to_square(img)
+        
+        assert padded.size == (512, 512)
+        assert padded.getpixel((256, 256)) == (0, 0, 255)
+
+
 class TestResizeAndCopyImages:
     """Tests for resize_and_copy_images function."""
     
     def test_resize_and_copy_images_basic(self, temp_dir, sample_images_dir):
-        """Test basic image resizing and copying."""
+        """Test basic image processing with minimum size filtering."""
         output_dir = Path(temp_dir) / "processed" / "images"
         
         count, filenames = resize_and_copy_images(
             raw_img_dir=sample_images_dir,
             resized_img_dir=str(output_dir),
-            resize_shape=(512, 512),
+            min_size=512,
+            target_size=(512, 512),
         )
         
-        # Check that correct number of images were processed
-        assert count == 5
-        assert len(filenames) == 5
+        # Should process 3 images (>= 512x512), skip 2 small ones
+        assert count == 3
+        assert len(filenames) == 3
         
         # Check that output directory exists
         assert output_dir.exists()
         
-        # Check that all images were created
+        # Check that processed images were created
         output_files = list(output_dir.glob("*.jpg"))
-        assert len(output_files) == 5
+        assert len(output_files) == 3
         
-        # Check that images are correctly resized
+        # Check that all images are correctly resized to 512x512
         for img_file in output_files:
             img = Image.open(img_file)
             assert img.size == (512, 512)
             assert img.mode == "RGB"
             assert img_file.name in filenames
+        
+        # Verify small images are not processed
+        assert "test_image_003.jpg" not in filenames  # 400x400 - too small
+        assert "test_image_004.jpg" not in filenames  # 300x500 - too small
     
-    def test_resize_and_copy_images_keeps_original_size(self, temp_dir, sample_images_dir):
-        """Test that images keep their original size when resize_shape is None."""
+    def test_resize_and_copy_images_pads_non_square(self, temp_dir, mixed_images_dir):
+        """Test that non-square images are padded and resized."""
         output_dir = Path(temp_dir) / "processed" / "images"
         
-        # Get original image sizes
-        raw_path = Path(sample_images_dir)
-        original_sizes = {}
-        for img_file in raw_path.glob("*.jpg"):
-            img = Image.open(img_file)
-            original_sizes[img_file.name] = img.size
-        
         count, filenames = resize_and_copy_images(
-            raw_img_dir=sample_images_dir,
+            raw_img_dir=mixed_images_dir,
             resized_img_dir=str(output_dir),
-            resize_shape=None,  # Keep original size
+            min_size=512,
+            target_size=(512, 512),
         )
         
-        # Check that correct number of images were processed
-        assert count == 5
-        assert len(filenames) == 5
+        # Should process 4 images (2 square + 2 non-square >= 512), skip 2 small ones
+        assert count == 4
+        assert len(filenames) == 4
         
-        # Check that images keep their original sizes
-        for img_file in output_dir.glob("*.jpg"):
+        # Check that all processed images are 512x512
+        output_files = list(output_dir.glob("*.jpg"))
+        assert len(output_files) == 4
+        
+        for img_file in output_files:
             img = Image.open(img_file)
-            original_size = original_sizes[img_file.name]
-            assert img.size == original_size, f"Image {img_file.name} size changed"
+            assert img.size == (512, 512)
             assert img.mode == "RGB"
+        
+        # Verify all >= 512 images are processed (square and non-square)
+        assert "square_000.jpg" in filenames
+        assert "square_001.jpg" in filenames
+        assert "asymmetric_000.jpg" in filenames  # 800x600 - padded and resized
+        assert "asymmetric_001.jpg" in filenames  # 1024x768 - padded and resized
+        
+        # Verify small images are not processed
+        assert "small_000.jpg" not in filenames
+        assert "small_001.jpg" not in filenames
     
-    def test_resize_and_copy_images_custom_size(self, temp_dir, sample_images_dir):
-        """Test resizing to custom dimensions."""
+    def test_resize_and_copy_images_custom_min_size(self, temp_dir):
+        """Test with custom minimum size threshold and upscaling prevention."""
+        img_dir = Path(temp_dir) / "raw_images"
+        img_dir.mkdir(parents=True)
+        
+        # Create images of various sizes
+        # Note: Images must be >= target_size after padding to avoid upscaling
+        sizes = [(600, 600), (500, 500), (400, 400), (300, 300)]
+        for i, size in enumerate(sizes):
+            img = Image.new("RGB", size, color=(i * 50, i * 50, i * 50))
+            img.save(img_dir / f"test_{i:03d}.jpg", "JPEG")
+        
         output_dir = Path(temp_dir) / "processed" / "images"
         
+        # With min_size=500 and target_size=(512, 512):
+        # - 600x600: >= 500, and >= 512 after padding -> processed (downscaled)
+        # - 500x500: >= 500, but < 512 after padding -> skipped (would require upscaling)
+        # - 400x400: < 500 -> skipped
+        # - 300x300: < 500 -> skipped
         count, filenames = resize_and_copy_images(
-            raw_img_dir=sample_images_dir,
+            raw_img_dir=str(img_dir),
             resized_img_dir=str(output_dir),
-            resize_shape=(256, 256),
+            min_size=500,
+            target_size=(512, 512),
         )
         
-        assert count == 5
-        assert len(filenames) == 5
-        
-        # Verify all images are 256x256
-        for img_file in output_dir.glob("*.jpg"):
-            img = Image.open(img_file)
-            assert img.size == (256, 256)
+        assert count == 1
+        assert len(filenames) == 1
+        assert "test_000.jpg" in filenames  # 600x600 - processed (downscaled to 512x512)
+        assert "test_001.jpg" not in filenames  # 500x500 - skipped (would upscale to 512x512)
+        assert "test_002.jpg" not in filenames  # 400x400 - too small
+        assert "test_003.jpg" not in filenames  # 300x300 - too small
     
     def test_resize_and_copy_images_nonexistent_dir(self, temp_dir):
         """Test error handling for nonexistent input directory."""
@@ -201,38 +282,8 @@ class TestResizeAndCopyImages:
         )
         
         assert output_dir.exists()
-        assert len(list(output_dir.glob("*.jpg"))) == 5
-        assert count == 5
-        assert len(filenames) == 5
-    
-    def test_resize_and_copy_images_filters_asymmetric(self, temp_dir, mixed_images_dir):
-        """Test that asymmetric (non-square) images are filtered out."""
-        output_dir = Path(temp_dir) / "processed" / "images"
-        
-        count, filenames = resize_and_copy_images(
-            raw_img_dir=mixed_images_dir,
-            resized_img_dir=str(output_dir),
-            resize_shape=(512, 512),
-        )
-        
-        # Should only process 3 square images, skip 2 asymmetric ones
-        assert count == 3
+        assert count == 3  # Only images >= 512x512
         assert len(filenames) == 3
-        
-        # Check that only square images were processed
-        output_files = list(output_dir.glob("*.jpg"))
-        assert len(output_files) == 3
-        
-        # Verify all processed images are square and correctly sized
-        for img_file in output_files:
-            img = Image.open(img_file)
-            assert img.size == (512, 512)
-            # Should only have square_*.jpg files
-            assert img_file.name.startswith("square_")
-        
-        # Verify asymmetric images are not in the processed set
-        assert "asymmetric_000.jpg" not in filenames
-        assert "asymmetric_001.jpg" not in filenames
 
 
 class TestConvertLabelsCsv:
@@ -355,20 +406,21 @@ class TestPreprocessDdr2019:
     """Tests for the complete preprocessing pipeline."""
     
     def test_preprocess_ddr2019_complete(self, temp_dir, sample_images_dir, sample_csv_file):
-        """Test the complete preprocessing pipeline with resizing."""
+        """Test the complete preprocessing pipeline."""
         processed_dir = Path(temp_dir) / "processed"
         
         results = preprocess_ddr2019(
             raw_img_dir=sample_images_dir,
             raw_csv_path=sample_csv_file,
             processed_dir=str(processed_dir),
-            resize_shape=(512, 512),
+            min_size=512,
+            target_size=(512, 512),
         )
         
-        # Check return values
-        assert results["images_processed"] == 5
+        # Should process 3 images (>= 512x512), skip 2 small ones
+        assert results["images_processed"] == 3
         assert results["labels_path"].exists()
-        assert len(results["processed_filenames"]) == 5
+        assert len(results["processed_filenames"]) == 3
         
         # Check directory structure
         images_dir = processed_dir / "images"
@@ -377,11 +429,11 @@ class TestPreprocessDdr2019:
         
         # Check images
         image_files = list(images_dir.glob("*.jpg"))
-        assert len(image_files) == 5
+        assert len(image_files) == 3
         
-        # Check labels CSV
+        # Check labels CSV - should only have 3 rows (for processed images)
         labels_df = pd.read_csv(results["labels_path"])
-        assert len(labels_df) == 5
+        assert len(labels_df) == 3
         assert list(labels_df.columns) == ["filename", "label"]
         
         # Verify that all filenames in CSV match processed images
@@ -389,50 +441,26 @@ class TestPreprocessDdr2019:
         image_filenames = {f.name for f in image_files}
         assert csv_filenames == image_filenames
         assert csv_filenames == results["processed_filenames"]
-    
-    def test_preprocess_ddr2019_keeps_original_size(self, temp_dir, sample_images_dir, sample_csv_file):
-        """Test preprocessing pipeline keeping original image sizes."""
-        processed_dir = Path(temp_dir) / "processed"
         
-        # Get original image sizes
-        raw_path = Path(sample_images_dir)
-        original_sizes = {}
-        for img_file in raw_path.glob("*.jpg"):
+        # Verify all processed images are 512x512
+        for img_file in image_files:
             img = Image.open(img_file)
-            original_sizes[img_file.name] = img.size
-        
-        results = preprocess_ddr2019(
-            raw_img_dir=sample_images_dir,
-            raw_csv_path=sample_csv_file,
-            processed_dir=str(processed_dir),
-            resize_shape=None,  # Keep original size
-        )
-        
-        # Check return values
-        assert results["images_processed"] == 5
-        assert results["labels_path"].exists()
-        assert len(results["processed_filenames"]) == 5
-        
-        # Check that images keep their original sizes
-        images_dir = processed_dir / "images"
-        for img_file in images_dir.glob("*.jpg"):
-            img = Image.open(img_file)
-            original_size = original_sizes[img_file.name]
-            assert img.size == original_size, f"Image {img_file.name} size changed"
+            assert img.size == (512, 512)
     
-    def test_preprocess_ddr2019_filters_asymmetric(self, temp_dir, mixed_images_dir):
-        """Test that preprocessing filters out asymmetric images."""
+    def test_preprocess_ddr2019_pads_and_resizes(self, temp_dir, mixed_images_dir):
+        """Test that preprocessing pads non-square images and resizes all to 512x512."""
         # Create CSV for mixed images
         csv_path = Path(temp_dir) / "DR_grading.csv"
         data = {
             "id_code": [
                 "square_000.jpg",
                 "square_001.jpg",
-                "square_002.jpg",
                 "asymmetric_000.jpg",
                 "asymmetric_001.jpg",
+                "small_000.jpg",
+                "small_001.jpg",
             ],
-            "diagnosis": [0, 1, 2, 0, 1],
+            "diagnosis": [0, 1, 0, 1, 2, 2],
         }
         df = pd.DataFrame(data)
         df.to_csv(csv_path, index=False)
@@ -443,59 +471,54 @@ class TestPreprocessDdr2019:
             raw_img_dir=mixed_images_dir,
             raw_csv_path=str(csv_path),
             processed_dir=str(processed_dir),
-            resize_shape=(512, 512),
+            min_size=512,
+            target_size=(512, 512),
         )
         
-        # Should only process 3 square images
-        assert results["images_processed"] == 3
-        assert len(results["processed_filenames"]) == 3
+        # Should process 4 images (2 square + 2 non-square >= 512), skip 2 small ones
+        assert results["images_processed"] == 4
+        assert len(results["processed_filenames"]) == 4
         
-        # Check that only square images were processed
+        # Check that all processed images are 512x512
         images_dir = processed_dir / "images"
         image_files = list(images_dir.glob("*.jpg"))
-        assert len(image_files) == 3
+        assert len(image_files) == 4
         
-        # Check labels CSV - should only have 3 rows
+        for img_file in image_files:
+            img = Image.open(img_file)
+            assert img.size == (512, 512)
+        
+        # Check labels CSV - should only have 4 rows
         labels_df = pd.read_csv(results["labels_path"])
-        assert len(labels_df) == 3
+        assert len(labels_df) == 4
         
-        # Verify CSV only contains square image labels
+        # Verify CSV contains all processed images (square and non-square >= 512)
         csv_filenames = set(labels_df["filename"])
-        assert csv_filenames == {"square_000.jpg", "square_001.jpg", "square_002.jpg"}
-        assert "asymmetric_000.jpg" not in csv_filenames
-        assert "asymmetric_001.jpg" not in csv_filenames
+        assert csv_filenames == {"square_000.jpg", "square_001.jpg", "asymmetric_000.jpg", "asymmetric_001.jpg"}
+        assert "small_000.jpg" not in csv_filenames
+        assert "small_001.jpg" not in csv_filenames
     
     def test_preprocess_ddr2019_default_paths(self, temp_dir, sample_images_dir, sample_csv_file):
-        """Test preprocessing with default paths and default behavior (no resizing)."""
-        # This test would require mocking the module constants or setting up
-        # the actual directory structure. For now, we'll test with explicit paths.
-        # In a real scenario, you might use monkeypatch to set the constants.
+        """Test preprocessing with default paths and default parameters."""
         processed_dir = Path(temp_dir) / "processed"
-        
-        # Get original image sizes
-        raw_path = Path(sample_images_dir)
-        original_sizes = {}
-        for img_file in raw_path.glob("*.jpg"):
-            img = Image.open(img_file)
-            original_sizes[img_file.name] = img.size
         
         results = preprocess_ddr2019(
             raw_img_dir=sample_images_dir,
             raw_csv_path=sample_csv_file,
             processed_dir=str(processed_dir),
-            # resize_shape=None by default - should keep original sizes
+            # Uses default min_size=512 and target_size=(512, 512)
         )
         
-        assert results["images_processed"] == 5
+        # Should process 3 images (>= 512x512)
+        assert results["images_processed"] == 3
         assert results["labels_path"].exists()
-        assert len(results["processed_filenames"]) == 5
+        assert len(results["processed_filenames"]) == 3
         
-        # Verify images keep original sizes (default behavior)
+        # Verify all processed images are 512x512
         images_dir = processed_dir / "images"
         for img_file in images_dir.glob("*.jpg"):
             img = Image.open(img_file)
-            original_size = original_sizes[img_file.name]
-            assert img.size == original_size, f"Image {img_file.name} size changed (should keep original)"
+            assert img.size == (512, 512)
 
 
 class TestIntegration:
@@ -527,20 +550,21 @@ class TestIntegration:
         # In practice, you might have images without labels or vice versa
     
     def test_image_shapes_consistent(self, temp_dir, sample_images_dir, sample_csv_file):
-        """Test that all processed images have consistent shapes when resized."""
+        """Test that all processed images have consistent shapes (512x512)."""
         processed_dir = Path(temp_dir) / "processed"
         
         preprocess_ddr2019(
             raw_img_dir=sample_images_dir,
             raw_csv_path=sample_csv_file,
             processed_dir=str(processed_dir),
-            resize_shape=(512, 512),
+            min_size=512,
+            target_size=(512, 512),
         )
         
         images_dir = processed_dir / "images"
         image_files = list(images_dir.glob("*.jpg"))
         
-        # All images should have the same size when resized
+        # All images should be 512x512
         sizes = {Image.open(f).size for f in image_files}
         assert len(sizes) == 1
         assert (512, 512) in sizes
@@ -553,6 +577,8 @@ class TestIntegration:
             raw_img_dir=sample_images_dir,
             raw_csv_path=sample_csv_file,
             processed_dir=str(processed_dir),
+            min_size=512,
+            target_size=(512, 512),
         )
         
         # Count files
@@ -561,9 +587,9 @@ class TestIntegration:
         labels_df = pd.read_csv(processed_dir / "labels.csv")
         label_count = len(labels_df)
         
-        # All counts should match
+        # All counts should match (3 images >= 512x512)
         assert results["images_processed"] == image_count
-        assert image_count == label_count == 5
+        assert image_count == label_count == 3
     
     def test_original_files_not_modified(self, temp_dir, sample_images_dir, sample_csv_file):
         """Test that original dataset files are not modified during preprocessing."""
