@@ -21,6 +21,7 @@ dependencies = [
     # For other platforms (ARM64 Mac, Linux, Windows), allow newer versions
     "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torchvision>=0.17.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "pytorch-lightning>=2.0.0",
 ]
 
 [project.scripts]
