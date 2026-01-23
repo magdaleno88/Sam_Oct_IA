@@ -8,6 +8,7 @@ A computer vision project to aid in the diagnosis of diabetic retinopathy using 
 - [Installation](#installation)
 - [Testing](#testing)
 - [Preprocessing](#preprocessing)
+- [Modeling](#modeling)
 - [Project Structure](#project-structure)
 - [Code Style](#code-style)
 - [References](#references)
@@ -24,6 +25,12 @@ A computer vision project to aid in the diagnosis of diabetic retinopathy using 
    uv run python -c "import torch; print(f'Torch: {torch.__version__}')"
    ```
 
+3. **Run tests:**
+   ```bash
+   uv sync --extra test
+   uv run pytest
+   ```
+
 ## Installation
 
 This project uses `uv` for package management. Install dependencies:
@@ -36,51 +43,24 @@ uv sync
 - macOS Intel (x86_64): PyTorch 2.2.2 (latest version with Intel support)
 - Other platforms: PyTorch 2.2.2 or newer
 
+For detailed installation instructions, troubleshooting, and platform-specific notes, see [Installation Documentation](docs/installation.md).
+
 ## Testing
 
 This project includes comprehensive unit tests using pytest. Run tests using `uv run`:
 
-### Install test dependencies
-
 ```bash
+# Install test dependencies
 uv sync --extra test
-```
 
-### Run all tests
-
-```bash
+# Run all tests
 uv run pytest
-```
 
-The default configuration (from `pyproject.toml`) provides verbose output and proper test discovery, so no additional parameters are needed.
-
-### Run specific test files
-
-```bash
-uv run pytest tests/test_preprocess_ddr2019.py
-uv run pytest tests/test_preprocessing_router.py
-```
-
-### Run with coverage
-
-```bash
+# Run with coverage
 uv run pytest --cov=sam_ml --cov-report=html
 ```
 
-### Additional options
-
-```bash
-# Quiet mode (minimal output)
-uv run pytest -q
-
-# Run specific test by name pattern
-uv run pytest -k "test_resize"
-
-# Run only fast tests (exclude slow markers)
-uv run pytest -m "not slow"
-```
-
-For more details, see [Tests Documentation](tests/README.md).
+For detailed testing documentation, including running specific tests, using markers, and writing new tests, see [Testing Documentation](docs/testing.md).
 
 ## Preprocessing
 
@@ -94,14 +74,8 @@ Process the DDR2019 dataset using the CLI:
 # Process with default settings (min-size=512, target-size=512x512)
 uv run preprocess-dataset ddr2019
 
-# Process with custom minimum size and target size
+# Process with custom settings
 uv run preprocess-dataset ddr2019 --min-size 512 --target-size 512 512
-
-# Process with custom paths
-uv run preprocess-dataset ddr2019 \
-  --raw-img-dir data/raw/ddr2019/DR_grading/DR_grading \
-  --raw-csv-path data/raw/ddr2019/DR_grading.csv \
-  --processed-dir data/processed/ddr2019
 ```
 
 ### Features
@@ -113,54 +87,38 @@ uv run preprocess-dataset ddr2019 \
 - **Label Synchronization**: CSV labels are automatically filtered to match processed images
 - **Original Data Protection**: Original dataset files are never modified
 
-### Available Datasets
+For complete preprocessing documentation, including detailed usage, pipeline explanation, and troubleshooting, see [Preprocessing Documentation](docs/preprocessing.md).
 
-- `ddr2019` - DDR2019 Diabetic Retinopathy dataset
+## Modeling
 
-### Preprocessing Behavior
+The modeling module provides a foundation for training and evaluating deep learning models using PyTorch Lightning.
 
-The preprocessing pipeline:
+### Quick Start
 
-1. **Filter by Minimum Size**: Only images with `width >= 512 AND height >= 512` are processed
-2. **Pad Non-Square Images**: Asymmetric images are padded with black pixels to make them square
-3. **Resize to Target Size**: All images are resized to 512x512 (downscaling only, never upscaling)
-4. **Filter Labels**: CSV labels are filtered to only include processed images
+```python
+from sam_ml.modeling.models import BaseLightningModel
+import torch.nn as nn
 
-**Important**: Images smaller than 512x512 are skipped to avoid upscaling, which would introduce noise.
+class MyModel(BaseLightningModel):
+    def _create_model(self) -> None:
+        self.model = nn.Sequential(
+            nn.Linear(10, 32),
+            nn.ReLU(),
+            nn.Linear(32, self.num_classes),
+        )
 
-### Output Structure
-
-After preprocessing, the dataset will be organized as:
-
-```
-data/processed/ddr2019/
-├── images/
-│   ├── 20170413102628830.jpg  (all 512x512)
-│   └── ...
-└── labels.csv
+model = MyModel(num_classes=5, learning_rate=1e-4)
 ```
 
-The `labels.csv` file contains:
-- `filename`: Image filename
-- `label`: Diagnosis label (0-4)
+### Features
 
-### Processing Statistics
+- **PyTorch Lightning Integration**: Built on PyTorch Lightning for easy training
+- **Standardized Training Loop**: Consistent training/validation/test steps
+- **Automatic Logging**: Built-in metric logging with proper flags
+- **Optimizer Configuration**: Easy configuration of optimizers and schedulers
+- **MLFlow Ready**: Placeholder methods for future MLFlow integration
 
-At the end of preprocessing, the script prints:
-- **Original dataset**: Total number of images in the raw dataset
-- **Processed dataset**: Number of images successfully processed
-- **Images skipped**: Number of images that were too small or would require upscaling
-
-Example output:
-```
-Preprocessing complete for ddr2019:
-  - Original dataset: 12524 images
-  - Processed dataset: 12524 images
-  - Images skipped: 0 images (too small or would require upscaling)
-  - Labels saved to: data/processed/ddr2019/labels.csv
-```
-
-For detailed usage instructions, see [Preprocessing Documentation](sam_ml/preprocessing/README.md).
+For complete modeling documentation, including API reference, examples, and best practices, see [Modeling Documentation](docs/modeling.md).
 
 ## Project Structure
 
@@ -173,157 +131,51 @@ sam-ai/
 │   ├── preprocessing/    # Dataset preprocessing scripts
 │   ├── datasets/        # PyTorch Dataset classes
 │   └── modeling/        # Model training and prediction
+│       └── models/      # Model architectures
 ├── tests/                # Unit tests
 ├── notebooks/            # Jupyter notebooks for exploration
 └── docs/                 # Documentation and research papers
 ```
 
+For detailed project structure documentation, see [Project Structure Documentation](docs/project-structure.md).
+
 ## Code Style
 
-This project follows Python typing standards and modern Python best practices. All code should adhere to the following guidelines:
+This project follows Python typing standards and modern Python best practices.
 
-### Type Hints
+### Key Guidelines
 
-- **All functions and methods must have type hints** for parameters and return types
-- Use `typing` module for complex types (`List`, `Tuple`, `Optional`, `Union`, `Dict`, etc.)
-- Use built-in types for simple cases (`int`, `str`, `bool`, `float`)
-- Use `Optional[T]` for parameters that can be `None`
-- Use `-> None` for functions that don't return a value
+- **Type Hints**: All functions, methods, and class attributes must have type hints
+- **Documentation**: All public functions, classes, and methods must have docstrings
+- **Formatting**: 4 spaces indentation, 100 character line limit, double quotes
+- **Naming**: PascalCase for classes, snake_case for functions, UPPER_SNAKE_CASE for constants
 
 **Example:**
 ```python
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 import torch
 
 def process_images(
     images: List[torch.Tensor],
-    batch_size: int = 32,
-    normalize: bool = True
+    batch_size: int = 32
 ) -> torch.Tensor:
     """Process a list of images."""
     # Implementation
     pass
 ```
 
-### Class Attributes
-
-- **Type hint all class attributes** that are set in `__init__`
-- Use `Optional[T]` for attributes that may be `None` initially
-
-**Example:**
-```python
-class MyModel:
-    def __init__(self, num_classes: int) -> None:
-        self.num_classes: int = num_classes
-        self.weights: Optional[torch.Tensor] = None
-```
-
-### Test Functions
-
-- **All test functions must have type hints** for fixtures and parameters
-- Use `-> None` for all test functions
-- Type hint pytest fixtures with return types
-
-**Example:**
-```python
-@pytest.fixture
-def model() -> MyModel:
-    return MyModel(num_classes=5)
-
-def test_initialization(model: MyModel) -> None:
-    assert model.num_classes == 5
-```
-
-### Import Organization
-
-- **Standard library imports first**
-- **Third-party imports second** (PyTorch, NumPy, etc.)
-- **Local imports last**
-- Use absolute imports for project modules
-
-**Example:**
-```python
-from typing import List, Optional
-from pathlib import Path
-
-import pytest
-import torch
-import numpy as np
-
-from sam_ml.modeling.models import MyModel
-```
-
-### Documentation
-
-- **All public functions, classes, and methods must have docstrings**
-- Use Google-style docstrings with `Args:` and `Returns:` sections
-- Include type information in docstrings when helpful for clarity
-
-### Code Formatting
-
-- Use **4 spaces** for indentation (no tabs)
-- Maximum line length: **100 characters** (soft limit, 120 hard limit)
-- Use **double quotes** for strings (consistent with Python conventions)
-- Add trailing commas in multi-line function calls and lists
-
-### Naming Conventions
-
-- **Classes**: `PascalCase` (e.g., `DualChannelModel`)
-- **Functions and methods**: `snake_case` (e.g., `process_images`)
-- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_BATCH_SIZE`)
-- **Private methods**: prefix with `_` (e.g., `_create_backbone`)
-- **Type variables**: `PascalCase` (e.g., `T`, `K`, `V`)
-
-### Type Checking Tools
-
-This project uses Python's built-in type system. For static type checking, you can use:
-
-- `mypy` - Static type checker
-- `pyright` - Fast type checker (used by Pylance in VS Code)
-
-**Example mypy configuration:**
-```bash
-mypy sam_ml/ --ignore-missing-imports
-```
-
-### Additional Guidelines
-
-- **Prefer explicit over implicit**: Use type hints even when types seem obvious
-- **Use `Optional[T]` instead of `Union[T, None]`**: More readable and idiomatic
-- **Use `Tuple` for fixed-size sequences**: `Tuple[int, int, int]` for (height, width, channels)
-- **Use `List[T]` for variable-length sequences**: `List[torch.Tensor]` for lists of tensors
-- **Type hint lambda functions** when used in complex contexts
-- **Avoid `Any` type**: Use more specific types when possible
-
-### Example: Fully Typed Function
-
-```python
-from typing import List, Optional, Tuple
-import torch
-import torch.nn as nn
-
-def create_model(
-    input_shape: Tuple[int, int, int] = (224, 224, 3),
-    num_classes: int = 5,
-    backbone: str = "resnet50"
-) -> nn.Module:
-    """
-    Create a deep learning model.
-    
-    Args:
-        input_shape: Shape of input images (height, width, channels)
-        num_classes: Number of output classes
-        backbone: Name of the backbone architecture
-        
-    Returns:
-        PyTorch module
-    """
-    # Implementation
-    pass
-```
-
-These styling rules ensure code consistency, improve readability, and enable better IDE support and static type checking.
+For complete code style guidelines, including detailed examples and type checking tools, see [Code Style Documentation](docs/code-style.md).
 
 ## References
 
-- [Identification of Diabetic Retinopathy Using Weighted Fusion Deep Learning Based on Dual-Channel Fundus Scans](https://www.mdpi.com/2075-4418/12/2/540)
+Vijayalakshmi, S., Manoharan, J. S., Nivetha, B., & Sathiya, A. (2025). Multi-task deep learning framework combining CNN, vision transformers and PSO for accurate diabetic retinopathy diagnosis and lesion localization. *Scientific Reports*, *15*(1), 35076. https://www.nature.com/articles/s41598-025-18742-z
+
+Voxel51, Inc. (2024). *FiftyOne documentation*. https://docs.voxel51.com
+
+Das, D., Biswas, S. K., & Bandyopadhyay, S. (2023). Detection of diabetic retinopathy using convolutional neural networks for feature extraction and classification (DRFEC). *Multimedia Tools and Applications*, *82*(19), 29943–30001. https://link.springer.com/article/10.1007/s11042-022-14165-4
+
+Nahiduzzaman, M., Islam, M. R., Goni, M. O. F., Anower, M. S., Ahsan, M., Haider, J., & Kowalski, M. (2023). Diabetic retinopathy identification using parallel convolutional neural network based feature extractor and ELM classifier. *Expert Systems with Applications*, *217*, 119557. https://www.sciencedirect.com/science/article/pii/S0957417423000581
+
+Usman, T. M., Saheed, Y. K., Ignace, D., & Nsang, A. (2023). Diabetic retinopathy detection using principal component analysis multi-label feature extraction and classification. *International Journal of Cognitive Computing in Engineering*, *4*, 78–88. https://www.sciencedirect.com/science/article/pii/S2666307423000050
+
+Zaharia, M., Chen, A., Davidson, A., Ghodsi, A., Hong, S. A., Konwinski, A., ... & Zumar, C. (2018). Accelerating the machine learning lifecycle with MLflow. *IEEE Data Eng. Bull.*, *41*(4), 39-45. https://people.eecs.berkeley.edu/~alig/papers/mlflow.pdf
