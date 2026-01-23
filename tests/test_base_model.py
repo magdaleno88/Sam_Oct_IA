@@ -58,12 +58,15 @@ class TestInitialization:
 
     def test_init_default_parameters(self) -> None:
         """Test initialization with default parameters."""
+        from sam_ml.config import get_model_config
+        
+        model_config = get_model_config()
         model = ConcreteTestModel()
         
-        assert model.num_classes == 5
-        assert model.learning_rate == 1e-4
-        assert model.optimizer_name == "adam"
-        assert model.weight_decay == 0.0
+        assert model.num_classes == model_config.num_classes
+        assert model.learning_rate == model_config.learning_rate
+        assert model.optimizer_name == model_config.optimizer
+        assert model.weight_decay == model_config.weight_decay
         assert model.model is not None
         assert isinstance(model.criterion, nn.CrossEntropyLoss)
 
@@ -432,6 +435,9 @@ class TestConfigureOptimizers:
 
     def test_configure_optimizers_adam(self, model_default: ConcreteTestModel) -> None:
         """Test optimizer configuration with Adam."""
+        from sam_ml.config import get_model_config
+        
+        model_config = get_model_config()
         config = model_default.configure_optimizers()
         
         assert isinstance(config, dict)
@@ -440,8 +446,8 @@ class TestConfigureOptimizers:
         
         optimizer = config["optimizer"]
         assert isinstance(optimizer, torch.optim.Adam)
-        assert optimizer.param_groups[0]["lr"] == 1e-4
-        assert optimizer.param_groups[0]["weight_decay"] == 0.0
+        assert optimizer.param_groups[0]["lr"] == model_config.learning_rate
+        assert optimizer.param_groups[0]["weight_decay"] == model_config.weight_decay
 
     def test_configure_optimizers_sgd(self, model_custom: ConcreteTestModel) -> None:
         """Test optimizer configuration with SGD."""

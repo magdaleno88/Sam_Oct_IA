@@ -15,14 +15,23 @@ import pandas as pd
 from PIL import Image
 from tqdm import tqdm
 
+from sam_ml.config import get_preprocessing_config
 
-# Default paths (can be overridden)
-RAW_IMG_DIR = "data/raw/ddr2019/DR_grading/DR_grading"
-RAW_CSV_PATH = "data/raw/ddr2019/DR_grading.csv"
-PROCESSED_DIR = "data/processed/ddr2019"
-RESIZED_IMG_DIR = os.path.join(PROCESSED_DIR, "images")
-MIN_SIZE = 512
-TARGET_SIZE = (512, 512)
+
+def _get_default_paths() -> tuple[Path, Path, Path]:
+    """Get default paths from config."""
+    config = get_preprocessing_config()
+    return (
+        config.ddr2019_raw_img_dir,
+        config.ddr2019_raw_csv_path,
+        config.ddr2019_processed_dir,
+    )
+
+
+def _get_default_sizes() -> tuple[int, tuple[int, int]]:
+    """Get default sizes from config."""
+    config = get_preprocessing_config()
+    return config.min_size, config.target_size
 
 
 def add_padding_to_square(img: Image.Image) -> Image.Image:
@@ -68,8 +77,8 @@ def add_padding_to_square(img: Image.Image) -> Image.Image:
 def resize_and_copy_images(
     raw_img_dir: Optional[str] = None,
     resized_img_dir: Optional[str] = None,
-    min_size: int = MIN_SIZE,
-    target_size: tuple[int, int] = TARGET_SIZE,
+    min_size: int | None = None,
+    target_size: tuple[int, int] | None = None,
 ) -> tuple[int, set[str]]:
     """Resize and copy images from raw directory to processed directory.
     
@@ -77,10 +86,10 @@ def resize_and_copy_images(
     Non-square images are padded to make them square, then all images are resized to target_size.
     
     Args:
-        raw_img_dir: Path to raw images directory. Defaults to RAW_IMG_DIR.
-        resized_img_dir: Path to output directory for resized images. Defaults to RESIZED_IMG_DIR.
-        min_size: Minimum size (width and height) required to process an image. Defaults to 512.
-        target_size: Target size (width, height) for resizing. Defaults to (512, 512).
+        raw_img_dir: Path to raw images directory. Defaults to config value.
+        resized_img_dir: Path to output directory for resized images. Defaults to config value.
+        min_size: Minimum size (width and height) required to process an image. Defaults to config value.
+        target_size: Target size (width, height) for resizing. Defaults to config value.
     
     Returns:
         Tuple of (number of images processed, set of processed filenames).
@@ -89,10 +98,18 @@ def resize_and_copy_images(
         FileNotFoundError: If raw_img_dir doesn't exist.
         OSError: If unable to create output directory or write images.
     """
+    # Get defaults from config
+    default_min_size, default_target_size = _get_default_sizes()
+    default_raw_img_dir, _, _ = _get_default_paths()
+    
+    if min_size is None:
+        min_size = default_min_size
+    if target_size is None:
+        target_size = default_target_size
     if raw_img_dir is None:
-        raw_img_dir = RAW_IMG_DIR
+        raw_img_dir = str(default_raw_img_dir)
     if resized_img_dir is None:
-        resized_img_dir = RESIZED_IMG_DIR
+        resized_img_dir = str(default_processed_dir / "images")
     
     raw_path = Path(raw_img_dir)
     if not raw_path.exists():
@@ -172,8 +189,8 @@ def convert_labels_csv(
     Only includes labels for images that were actually processed (size >= 512x512).
     
     Args:
-        raw_csv_path: Path to input CSV file. Defaults to RAW_CSV_PATH.
-        processed_dir: Directory to save output CSV. Defaults to PROCESSED_DIR.
+        raw_csv_path: Path to input CSV file. Defaults to config value.
+        processed_dir: Directory to save output CSV. Defaults to config value.
         output_filename: Name of output CSV file. Defaults to "labels.csv".
         processed_filenames: Set of filenames that were successfully processed.
                             If None, includes all rows from CSV.
@@ -185,10 +202,13 @@ def convert_labels_csv(
         FileNotFoundError: If raw_csv_path doesn't exist.
         ValueError: If required columns are missing in the CSV.
     """
+    # Get defaults from config
+    _, default_raw_csv_path, default_processed_dir = _get_default_paths()
+    
     if raw_csv_path is None:
-        raw_csv_path = RAW_CSV_PATH
+        raw_csv_path = str(default_raw_csv_path)
     if processed_dir is None:
-        processed_dir = PROCESSED_DIR
+        processed_dir = str(default_processed_dir)
     
     raw_path = Path(raw_csv_path)
     if not raw_path.exists():
@@ -232,8 +252,8 @@ def preprocess_ddr2019(
     raw_img_dir: Optional[str] = None,
     raw_csv_path: Optional[str] = None,
     processed_dir: Optional[str] = None,
-    min_size: int = MIN_SIZE,
-    target_size: tuple[int, int] = TARGET_SIZE,
+    min_size: int | None = None,
+    target_size: tuple[int, int] | None = None,
 ) -> dict:
     """Run complete preprocessing pipeline for DDR2019 dataset.
     
@@ -242,11 +262,11 @@ def preprocess_ddr2019(
     Labels for non-processed images are removed from the output CSV.
     
     Args:
-        raw_img_dir: Path to raw images directory. Defaults to RAW_IMG_DIR.
-        raw_csv_path: Path to raw CSV file. Defaults to RAW_CSV_PATH.
-        processed_dir: Output directory for processed data. Defaults to PROCESSED_DIR.
-        min_size: Minimum size (width and height) required to process an image. Defaults to 512.
-        target_size: Target size for image resizing. Defaults to (512, 512).
+        raw_img_dir: Path to raw images directory. Defaults to config value.
+        raw_csv_path: Path to raw CSV file. Defaults to config value.
+        processed_dir: Output directory for processed data. Defaults to config value.
+        min_size: Minimum size (width and height) required to process an image. Defaults to config value.
+        target_size: Target size for image resizing. Defaults to config value.
     
     Returns:
         Dictionary with processing results:
@@ -254,8 +274,20 @@ def preprocess_ddr2019(
         - labels_path: Path to created labels.csv (only for processed images)
         - processed_filenames: Set of filenames that were processed
     """
+    # Get defaults from config
+    default_min_size, default_target_size = _get_default_sizes()
+    _, default_raw_csv_path, default_processed_dir = _get_default_paths()
+    
+    if min_size is None:
+        min_size = default_min_size
+    if target_size is None:
+        target_size = default_target_size
+    if raw_img_dir is None:
+        raw_img_dir = str(default_raw_img_dir)
+    if raw_csv_path is None:
+        raw_csv_path = str(default_raw_csv_path)
     if processed_dir is None:
-        processed_dir = PROCESSED_DIR
+        processed_dir = str(default_processed_dir)
     
     resized_img_dir = os.path.join(processed_dir, "images")
     
@@ -283,11 +315,14 @@ def preprocess_ddr2019(
 
 if __name__ == "__main__":
     print("Starting DDR2019 preprocessing...")
-    print(f"  - Minimum size: {MIN_SIZE}x{MIN_SIZE}")
-    print(f"  - Target size: {TARGET_SIZE[0]}x{TARGET_SIZE[1]}")
+    min_size, target_size = _get_default_sizes()
+    raw_img_dir, raw_csv_path, processed_dir = _get_default_paths()
+    
+    print(f"  - Minimum size: {min_size}x{min_size}")
+    print(f"  - Target size: {target_size[0]}x{target_size[1]}")
     
     # Count original images before processing
-    raw_img_dir = RAW_IMG_DIR
+    raw_img_dir = str(raw_img_dir)
     raw_path = Path(raw_img_dir)
     if raw_path.exists():
         original_image_count = len(list(raw_path.glob("*.jpg")))

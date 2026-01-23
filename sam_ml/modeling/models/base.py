@@ -8,6 +8,8 @@ from pytorch_lightning import LightningModule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
+from sam_ml.config import get_model_config, get_scheduler_config
+
 
 class BaseLightningModel(LightningModule):
     """
@@ -27,29 +29,33 @@ class BaseLightningModel(LightningModule):
 
     def __init__(
         self,
-        num_classes: int = 5,
-        learning_rate: float = 1e-4,
-        optimizer: str = "adam",
-        weight_decay: float = 0.0,
+        num_classes: int | None = None,
+        learning_rate: float | None = None,
+        optimizer: str | None = None,
+        weight_decay: float | None = None,
         **kwargs: Any,
     ) -> None:
         """
         Initialize the base model.
         
         Args:
-            num_classes: Number of output classes for classification
-            learning_rate: Learning rate for optimizer
-            optimizer: Optimizer name ('adam', 'sgd', etc.)
-            weight_decay: Weight decay (L2 regularization) coefficient
+            num_classes: Number of output classes for classification (defaults to config)
+            learning_rate: Learning rate for optimizer (defaults to config)
+            optimizer: Optimizer name ('adam', 'sgd', etc.) (defaults to config)
+            weight_decay: Weight decay (L2 regularization) coefficient (defaults to config)
             **kwargs: Additional arguments passed to subclasses
         """
         super().__init__()
-        self.save_hyperparameters()
         
-        self.num_classes: int = num_classes
-        self.learning_rate: float = learning_rate
-        self.optimizer_name: str = optimizer.lower()
-        self.weight_decay: float = weight_decay
+        # Get defaults from config
+        model_config = get_model_config()
+        
+        self.num_classes: int = num_classes if num_classes is not None else model_config.num_classes
+        self.learning_rate: float = learning_rate if learning_rate is not None else model_config.learning_rate
+        self.optimizer_name: str = (optimizer or model_config.optimizer).lower()
+        self.weight_decay: float = weight_decay if weight_decay is not None else model_config.weight_decay
+        
+        self.save_hyperparameters()
         
         # Model architecture (to be created by subclasses)
         self.model: Optional[nn.Module] = None
@@ -249,20 +255,21 @@ class BaseLightningModel(LightningModule):
                 "Supported optimizers: 'adam', 'sgd'"
             )
         
-        # Configure learning rate scheduler
+        # Configure learning rate scheduler from config
+        scheduler_config = get_scheduler_config()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
-            mode="min",
-            factor=0.5,
-            patience=5,
-            verbose=True,
+            mode=scheduler_config.mode,
+            factor=scheduler_config.factor,
+            patience=scheduler_config.patience,
+            verbose=scheduler_config.verbose,
         )
         
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_loss",
+                "monitor": scheduler_config.monitor,
             },
         }
 

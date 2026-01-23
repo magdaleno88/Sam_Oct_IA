@@ -22,10 +22,13 @@ dependencies = [
     "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torchvision>=0.17.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "pytorch-lightning>=2.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
 ]
 
 [project.scripts]
 preprocess-dataset = "sam_ml.preprocessing:main"
+train-model = "sam_ml.modeling.train:main"
 
 [tool.uv.build-backend]
 # Configure uv_build to use root-level packages (not src/ layout)

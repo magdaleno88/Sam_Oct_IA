@@ -9,6 +9,8 @@ A computer vision project to aid in the diagnosis of diabetic retinopathy using 
 - [Testing](#testing)
 - [Preprocessing](#preprocessing)
 - [Modeling](#modeling)
+- [Creating Models](#creating-models)
+- [Configuration](#configuration)
 - [Project Structure](#project-structure)
 - [Code Style](#code-style)
 - [References](#references)
@@ -119,6 +121,66 @@ model = MyModel(num_classes=5, learning_rate=1e-4)
 - **MLFlow Ready**: Placeholder methods for future MLFlow integration
 
 For complete modeling documentation, including API reference, examples, and best practices, see [Modeling Documentation](docs/modeling.md).
+
+## Creating Models
+
+The project includes a model registry system that makes it easy to create and experiment with new model architectures. You can:
+
+- Create your model architecture (PyTorch `nn.Module`)
+- Wrap it in `BaseLightningModel` for automatic training capabilities
+- Register it with a unique key
+- Run experiments using the unified training pipeline
+
+**Quick Example:**
+```python
+from sam_ml.modeling.models import get_model
+
+# Get any registered model
+model = get_model("simple_cnn", num_classes=5, learning_rate=1e-4)
+
+# List all available models
+from sam_ml.modeling.models import list_models
+print(list_models())  # ['simple_cnn', ...]
+```
+
+**Training a Model:**
+```bash
+# Train using the script shortcut
+uv run train-model --model simple_cnn --num-classes 5 --num-epochs 50
+
+# List available models and options
+uv run train-model --help
+```
+
+For a complete step-by-step guide on creating new models, see [Creating Models Guide](docs/creating-models.md).
+
+## Configuration
+
+The project uses a centralized configuration system built with Pydantic. All default values are managed in `sam_ml/config.py`.
+
+### Quick Start
+
+```python
+from sam_ml.config import get_model_config, get_training_config
+
+# Get configuration defaults
+model_config = get_model_config()
+training_config = get_training_config()
+
+print(f"Default num_classes: {model_config.num_classes}")
+print(f"Default batch_size: {training_config.batch_size}")
+```
+
+### Environment Variables
+
+Override defaults using environment variables:
+
+```bash
+export SAM_MODEL_NUM_CLASSES=3
+export SAM_TRAINING_BATCH_SIZE=64
+```
+
+For complete configuration documentation, including all available settings and customization options, see [Configuration Documentation](docs/configuration.md).
 
 ## Project Structure
 

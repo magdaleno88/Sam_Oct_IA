@@ -83,12 +83,42 @@ The base model automatically configures a `ReduceLROnPlateau` scheduler that:
 
 ## Training with PyTorch Lightning
 
+### Using the Training Script (Recommended)
+
+The project includes a unified training script that uses the model registry:
+
+```bash
+# List available models
+uv run train-model --help
+
+# Train a model
+uv run train-model --model simple_cnn --num-classes 5 --learning-rate 1e-4 --num-epochs 50
+```
+
+**Available options:**
+- `--model`: Model key from registry (required)
+- `--num-classes`: Number of output classes (default: 5)
+- `--learning-rate`: Learning rate (default: 1e-4)
+- `--optimizer`: Optimizer name: 'adam' or 'sgd' (default: adam)
+- `--weight-decay`: Weight decay coefficient (default: 1e-4)
+- `--batch-size`: Batch size (default: 32)
+- `--num-epochs`: Number of epochs (default: 50)
+- `--data-dir`: Dataset directory (default: data/processed/ddr2019)
+- `--output-dir`: Output directory (default: outputs)
+- `--gpus`: Number of GPUs (default: None, uses CPU)
+- `--patience`: Early stopping patience (default: 10)
+
+### Programmatic Training
+
+You can also train models programmatically:
+
 ```python
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
+from sam_ml.modeling.models import get_model
 
-# Create model
-model = MyModel(num_classes=5)
+# Get model from registry
+model = get_model("simple_cnn", num_classes=5)
 
 # Create trainer
 trainer = Trainer(

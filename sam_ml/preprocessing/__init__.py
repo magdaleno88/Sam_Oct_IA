@@ -51,11 +51,16 @@ Examples:
         help="Path to processed output directory (overrides default)",
     )
     
+    # Get defaults from config
+    from sam_ml.config import get_preprocessing_config
+    
+    preprocessing_config = get_preprocessing_config()
+    
     parser.add_argument(
         "--min-size",
         type=int,
-        default=512,
-        help="Minimum size (width and height) required to process an image. Defaults to 512.",
+        default=preprocessing_config.min_size,
+        help=f"Minimum size (width and height) required to process an image. Defaults to {preprocessing_config.min_size}.",
     )
     
     parser.add_argument(
@@ -63,8 +68,8 @@ Examples:
         type=int,
         nargs=2,
         metavar=("WIDTH", "HEIGHT"),
-        default=[512, 512],
-        help="Target size for image resizing (width height). Defaults to 512 512.",
+        default=list(preprocessing_config.target_size),
+        help=f"Target size for image resizing (width height). Defaults to {preprocessing_config.target_size[0]} {preprocessing_config.target_size[1]}.",
     )
     
     if args is None:
@@ -92,7 +97,10 @@ Examples:
             
             # Count original images before processing
             from pathlib import Path
-            raw_img_dir = kwargs.get("raw_img_dir") or "data/raw/ddr2019/DR_grading/DR_grading"
+            from sam_ml.config import get_preprocessing_config
+            
+            preprocessing_config = get_preprocessing_config()
+            raw_img_dir = kwargs.get("raw_img_dir") or str(preprocessing_config.ddr2019_raw_img_dir)
             raw_path = Path(raw_img_dir)
             if raw_path.exists():
                 original_image_count = len(list(raw_path.glob("*.jpg")))
