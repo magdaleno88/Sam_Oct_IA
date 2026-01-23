@@ -192,5 +192,5 @@ checkpoints/
 outputs/
 
 # Data files
-data/**/*.zip
-
+data/raw/*
+data/processed/*

@@ -11,6 +11,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "opencv-python>=4.8.0,<4.11.0", # Compatible with numpy<2.0 (required by tensorflow 2.16.2)
+    "pandas>=2.0.0", # Required for CSV processing in preprocessing
     "pillow>=10.0.0", # Required for PIL Image support (used by datasets library)
     "tqdm>=4.66.0", # Progress bars for long-running operations
     # PyTorch: Pin to 2.2.0 for macOS Intel (x86_64) compatibility
@@ -20,10 +21,14 @@ dependencies = [
     # For other platforms (ARM64 Mac, Linux, Windows), allow newer versions
     "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torchvision>=0.17.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "pytorch-lightning>=2.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
 ]
 
 [project.scripts]
 preprocess-dataset = "sam_ml.preprocessing:main"
+train-model = "sam_ml.modeling.train:main"
 
 [tool.uv.build-backend]
 # Configure uv_build to use root-level packages (not src/ layout)
