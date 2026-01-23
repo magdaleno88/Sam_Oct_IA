@@ -100,7 +100,7 @@ def resize_and_copy_images(
     """
     # Get defaults from config
     default_min_size, default_target_size = _get_default_sizes()
-    default_raw_img_dir, _, _ = _get_default_paths()
+    default_raw_img_dir, _, default_processed_dir = _get_default_paths()
     
     if min_size is None:
         min_size = default_min_size
@@ -276,7 +276,7 @@ def preprocess_ddr2019(
     """
     # Get defaults from config
     default_min_size, default_target_size = _get_default_sizes()
-    _, default_raw_csv_path, default_processed_dir = _get_default_paths()
+    default_raw_img_dir, default_raw_csv_path, default_processed_dir = _get_default_paths()
     
     if min_size is None:
         min_size = default_min_size
