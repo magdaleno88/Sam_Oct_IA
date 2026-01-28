@@ -1,0 +1,36 @@
+# FiftyOne (Voxel51) app server - managed by UV
+# Requirements per https://docs.voxel51.com/installation/index.html and
+# https://docs.voxel51.com/installation/environments.html
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+
+# Copy dependency files (run `uv lock` in project root for reproducible builds)
+COPY pyproject.toml uv.lock ./
+# Healthcheck and entrypoint
+COPY docker/healthchecks/healthcheck-fiftyone.sh /app/healthcheck-fiftyone.sh
+COPY docker/entrypoint-fiftyone.sh /app/entrypoint-fiftyone.sh
+
+# System deps per FiftyOne installation docs:
+# - Python 3.9-3.12 (base image); python3-dev for psutil (Linux, Debian)
+# - FFmpeg for video datasets (https://docs.voxel51.com/installation/index.html)
+# - libssl-dev: fiftyone-db / libcrypto (troubleshooting); we use external MongoDB but keep for compat
+# - libsm6, libxext6: cloud instance setup (https://docs.voxel51.com/installation/environments.html)
+# - libxcb1, libgl1, libgomp1: OpenCV/cv2 headless
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+    ffmpeg \
+    python3-dev \
+    libssl-dev \
+    libsm6 libxext6 \
+    libxcb1 libgl1 libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && chmod +x /app/healthcheck-fiftyone.sh /app/entrypoint-fiftyone.sh
+
+RUN uv sync --frozen --no-dev --extra fiftyone --no-install-project
+
+EXPOSE 5151
+
+# Entrypoint: if FIFTYONE_DATASET_NAME is set, launches with that dataset so the App
+# opens with it loaded; otherwise launches an empty App.
+ENTRYPOINT ["/app/entrypoint-fiftyone.sh"]

@@ -170,43 +170,39 @@ def main() -> None:
         log_every_n_steps=10,
     )
     
-    # TODO: Load datasets when dataset classes are available
-    # For now, print a message
-    print("\n" + "=" * 60)
-    print("NOTE: Dataset loading is not yet implemented.")
-    print("When dataset classes are available, uncomment the following:")
-    print("  - Create train_dataset and val_dataset")
-    print("  - Create train_loader and val_loader")
-    print("  - Call trainer.fit(model, train_loader, val_loader)")
-    print("=" * 60)
-    
-    # Uncomment when datasets are ready:
-    # from sam_ml.datasets import DiabeticRetinopathyDataset
-    # from torch.utils.data import DataLoader
-    # 
-    # train_dataset = DiabeticRetinopathyDataset(
-    #     data_dir=args.data_dir,
-    #     split="train",
-    # )
-    # val_dataset = DiabeticRetinopathyDataset(
-    #     data_dir=args.data_dir,
-    #     split="val",
-    # )
-    # 
-    # train_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=args.batch_size,
-    #     shuffle=True,
-    #     num_workers=4,
-    # )
-    # val_loader = DataLoader(
-    #     val_dataset,
-    #     batch_size=args.batch_size,
-    #     shuffle=False,
-    #     num_workers=4,
-    # )
-    # 
-    # trainer.fit(model, train_loader, val_loader)
+    # Load datasets using DDR2019Dataset (processed layout: data_dir/labels.csv, data_dir/images/)
+    from sam_ml.datasets import DDR2019Dataset
+    from torch.utils.data import DataLoader
+
+    train_dataset = DDR2019Dataset(
+        data_dir=args.data_dir,
+        split="train",
+        train_ratio=0.8,
+        val_ratio=0.2,
+        random_state=42,
+    )
+    val_dataset = DDR2019Dataset(
+        data_dir=args.data_dir,
+        split="val",
+        train_ratio=0.8,
+        val_ratio=0.2,
+        random_state=42,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=0,  # set to 4+ if desired; 0 avoids multiprocessing issues in some environments
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=0,
+    )
+
+    trainer.fit(model, train_loader, val_loader)
 
 
 if __name__ == "__main__":
