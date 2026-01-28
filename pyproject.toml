@@ -27,6 +27,7 @@ dependencies = [
     "pytorch-lightning>=2.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "seaborn[notebook]>=0.13.2",
 ]
 
 [project.scripts]
@@ -49,6 +50,13 @@ test = [
 notebook = [
     "jupyter>=1.0.0",
     "matplotlib>=3.8.0",
+]
+
+# FiftyOne (Voxel51) for dataset visualization and curation
+fiftyone = [
+    "fiftyone>=0.27",
+    "python-dotenv",
+    "jupyter>=1.0.0",
 ]
 
 [tool.pytest.ini_options]

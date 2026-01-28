@@ -1,0 +1,35 @@
+# FiftyOne (Voxel51) app for dataset visualization and curation
+# Ref: https://docs.voxel51.com/installation/environments.html#docker
+#
+# Data: project root/data/processed/ (e.g. data/processed/ddr2019/images/, labels.csv).
+# - MongoDB: remote only (e.g. Atlas). FIFTYONE_DATABASE_URI in .env; same for the team.
+# - Before first up (or when data/processed changes): ./docker/ingest-fiftyone.sh
+#   (ingests with /workspace paths so the Docker App can load images).
+# - Then: docker compose -f docker/docker-compose.yml up -d
+# - App: http://localhost:5151
+
+services:
+  fiftyone:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.fiftyone
+    env_file:
+      - ../.env
+    environment:
+      FIFTYONE_DEFAULT_APP_ADDRESS: "0.0.0.0"
+      # Default dataset when App starts. Override in .env: FIFTYONE_DATASET_NAME= to open with none.
+      FIFTYONE_DATASET_NAME: "${FIFTYONE_DATASET_NAME:-ddr2019}"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    ports:
+      - "5151:5151"
+    healthcheck:
+      test: ["CMD", "/app/healthcheck-fiftyone.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      # Project root → /workspace so data/processed/ is /workspace/data/processed/
+      - ..:/workspace
