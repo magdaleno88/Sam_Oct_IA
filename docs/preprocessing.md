@@ -18,6 +18,9 @@ uv run preprocess-dataset ddr2019 \
   --raw-img-dir data/raw/ddr2019/DR_grading/DR_grading \
   --raw-csv-path data/raw/ddr2019/DR_grading.csv \
   --processed-dir data/processed/ddr2019
+
+# Output to a named folder under data/processed (e.g. second version with different size)
+uv run preprocess-dataset ddr2019 --output-name ddr2019_384 --target-size 384 384
 ```
 
 ## Features
@@ -60,7 +63,8 @@ uv run preprocess-dataset <dataset_name> [options]
 
 - `--raw-img-dir PATH`: Path to raw images directory (default: dataset-specific)
 - `--raw-csv-path PATH`: Path to raw CSV labels file (default: dataset-specific)
-- `--processed-dir PATH`: Output directory for processed data (default: `data/processed/<dataset_name>`)
+- `--processed-dir PATH`: Full path to output directory (overrides default and `--output-name`)
+- `--output-name FOLDER`: Output folder name under `data/processed` (default: dataset key, e.g. `ddr2019`). Use e.g. `ddr2019_384` for a second version with different size. Ignored if `--processed-dir` is set.
 - `--min-size SIZE`: Minimum image size in pixels (default: 512)
 - `--target-size WIDTH HEIGHT`: Target image size after processing (default: 512 512)
 
@@ -76,7 +80,10 @@ uv run preprocess-dataset ddr2019 --min-size 600
 # Custom target size
 uv run preprocess-dataset ddr2019 --target-size 256 256
 
-# Full custom configuration
+# Second version with different size (output to data/processed/ddr2019_384)
+uv run preprocess-dataset ddr2019 --output-name ddr2019_384 --target-size 384 384
+
+# Full custom configuration (full path overrides --output-name)
 uv run preprocess-dataset ddr2019 \
   --raw-img-dir /path/to/raw/images \
   --raw-csv-path /path/to/labels.csv \
@@ -87,12 +94,12 @@ uv run preprocess-dataset ddr2019 \
 
 ## Output Structure
 
-After preprocessing, the dataset will be organized as:
+After preprocessing, the dataset will be organized under the output directory. By default (or with `--output-name ddr2019`) the path is `data/processed/ddr2019/`. With `--output-name FOLDER` the path is `data/processed/<FOLDER>/`.
 
 ```
-data/processed/ddr2019/
+data/processed/ddr2019/          # or data/processed/<output-name>/
 ├── images/
-│   ├── 20170413102628830.jpg  (all 512x512)
+│   ├── 20170413102628830.jpg    (resized to target size)
 │   └── ...
 └── labels.csv
 ```

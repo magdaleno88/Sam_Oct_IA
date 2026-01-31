@@ -24,6 +24,8 @@ Examples:
   preprocess-dataset ddr2019
   preprocess-dataset ddr2019 --raw-img-dir /path/to/images
   preprocess-dataset ddr2019 --min-size 512 --target-size 512 512
+  preprocess-dataset ddr2019 --output-name ddr2019_384 --target-size 384 384
+  preprocess-dataset ddr2019 --output-name ddr2019_512  (same as default folder name)
         """,
     )
     
@@ -48,7 +50,16 @@ Examples:
     parser.add_argument(
         "--processed-dir",
         type=str,
-        help="Path to processed output directory (overrides default)",
+        help="Full path to processed output directory (overrides default and --output-name)",
+    )
+    
+    parser.add_argument(
+        "--output-name",
+        type=str,
+        default=None,
+        metavar="FOLDER",
+        help="Output folder name under data/processed (default: dataset key, e.g. 'ddr2019'). "
+        "Use e.g. 'ddr2019_512' for a second version with different size. Ignored if --processed-dir is set.",
     )
     
     # Get defaults from config
@@ -79,7 +90,19 @@ Examples:
     
     # Route to appropriate preprocessing script
     if parsed_args.dataset == "ddr2019":
+        from pathlib import Path
+        
         from sam_ml.preprocessing.preprocess_ddr2019 import preprocess_ddr2019
+        
+        # Resolve processed output directory:
+        # --processed-dir wins (full path); else --output-name under data/processed; else config default (dataset key as folder)
+        if parsed_args.processed_dir:
+            processed_dir = parsed_args.processed_dir
+        elif parsed_args.output_name is not None:
+            base_processed = preprocessing_config.ddr2019_processed_dir.parent
+            processed_dir = str(Path(base_processed) / parsed_args.output_name)
+        else:
+            processed_dir = None  # use config default (dataset key = folder name)
         
         # Prepare keyword arguments
         kwargs = {}
@@ -87,8 +110,8 @@ Examples:
             kwargs["raw_img_dir"] = parsed_args.raw_img_dir
         if parsed_args.raw_csv_path:
             kwargs["raw_csv_path"] = parsed_args.raw_csv_path
-        if parsed_args.processed_dir:
-            kwargs["processed_dir"] = parsed_args.processed_dir
+        if processed_dir is not None:
+            kwargs["processed_dir"] = processed_dir
         kwargs["min_size"] = parsed_args.min_size
         kwargs["target_size"] = tuple(parsed_args.target_size)
         
@@ -96,10 +119,6 @@ Examples:
             print(f"Starting preprocessing for dataset: {parsed_args.dataset}")
             
             # Count original images before processing
-            from pathlib import Path
-            from sam_ml.config import get_preprocessing_config
-            
-            preprocessing_config = get_preprocessing_config()
             raw_img_dir = kwargs.get("raw_img_dir") or str(preprocessing_config.ddr2019_raw_img_dir)
             raw_path = Path(raw_img_dir)
             if raw_path.exists():

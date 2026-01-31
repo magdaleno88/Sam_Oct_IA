@@ -1,5 +1,6 @@
 """Unit tests for preprocessing router script."""
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -198,3 +199,22 @@ class TestPreprocessingRouter:
         for img_file in images_dir.glob("*.jpg"):
             img = Image.open(img_file)
             assert img.size == (256, 256)
+
+    def test_main_ddr2019_output_name(self, temp_dir, sample_images_dir, sample_csv_file):
+        """Test that --output-name sets folder name under data/processed (default base)."""
+        # Run from temp_dir so output goes to temp_dir/data/processed/<output-name>
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            exit_code = main([
+                "ddr2019",
+                "--raw-img-dir", sample_images_dir,
+                "--raw-csv-path", sample_csv_file,
+                "--output-name", "ddr2019_384",
+            ])
+            assert exit_code == 0
+            out_dir = Path("data/processed/ddr2019_384")
+            assert (out_dir / "images").exists()
+            assert (out_dir / "labels.csv").exists()
+        finally:
+            os.chdir(orig_cwd)
