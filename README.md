@@ -78,6 +78,9 @@ uv run preprocess-dataset ddr2019
 
 # Process with custom settings
 uv run preprocess-dataset ddr2019 --min-size 512 --target-size 512 512
+
+# Output to a different folder (e.g. second version with different size)
+uv run preprocess-dataset ddr2019 --output-name ddr2019_384 --target-size 384 384
 ```
 
 ### Features
@@ -230,14 +233,29 @@ For complete code style guidelines, including detailed examples and type checkin
 
 ## References
 
-Vijayalakshmi, S., Manoharan, J. S., Nivetha, B., & Sathiya, A. (2025). Multi-task deep learning framework combining CNN, vision transformers and PSO for accurate diabetic retinopathy diagnosis and lesion localization. *Scientific Reports*, *15*(1), 35076. https://www.nature.com/articles/s41598-025-18742-z
+1. Kumar, V., Sharma, G., & Garg, D. (2023, November). Analysis of Early Detection and Prediction of Diabetic Retinopathy by Optimize Deep Learning with XG-Boosting. In Conference on Smart Generation Computing and Communication Networks (pp. 61-69). Cham: Springer Nature Switzerland. https://link.springer.com/chapter/10.1007/978-3-032-06798-2_6
 
-Voxel51, Inc. (2024). *FiftyOne documentation*. https://docs.voxel51.com
+2. Lalithadevi, B., & Krishnaveni, S. (2024). Diabetic retinopathy detection and severity classification
+using optimized deep learning with explainable AI technique. Multimedia Tools and Applications,
+83(42), 89949-90013. https://link.springer.com/article/10.1007/s11042-024-18863-z
+3. Muthusamy, D., & Palani, P. (2024). Deep learning model using classification for diabetic
+retinopathy detection: an overview. Artificial Intelligence Review, 57(7), 185.
+https://link.springer.com/content/pdf/10.1007/s10462-024-10806-2.pdf
+4. Nahiduzzaman, M., Islam, M. R., Goni, M. O. F., Anower, M. S., Ahsan, M., Haider, J., & Kowalski, M.
+(2023). Diabetic retinopathy identification using parallel convolutional neural network based feature
+extractor and ELM classifier. Expert Systems with Applications, 217, 119557.
+https://www.sciencedirect.com/science/article/pii/S0957417423000581
+5. Usman, T. M., Saheed, Y. K., Ignace, D., & Nsang, A. (2023). Diabetic retinopathy detection using
+principal component analysis multi-label feature extraction and classification. International Journal
+of Cognitive Computing in Engineering, 4, 78–88.
+https://www.sciencedirect.com/science/article/pii/S2666307423000050
 
-Das, D., Biswas, S. K., & Bandyopadhyay, S. (2023). Detection of diabetic retinopathy using convolutional neural networks for feature extraction and classification (DRFEC). *Multimedia Tools and Applications*, *82*(19), 29943–30001. https://link.springer.com/article/10.1007/s11042-022-14165-4
+6. Vijayalakshmi, S., Manoharan, J. S., Nivetha, B., & Sathiya, A. (2025). Multi-task deep learning framework combining CNN, vision transformers and PSO for accurate diabetic retinopathy diagnosis and lesion localization. Scientific Reports, 15(1), 35076. https://www.nature.com/articles/s41598-
+025-18742-z
 
-Nahiduzzaman, M., Islam, M. R., Goni, M. O. F., Anower, M. S., Ahsan, M., Haider, J., & Kowalski, M. (2023). Diabetic retinopathy identification using parallel convolutional neural network based feature extractor and ELM classifier. *Expert Systems with Applications*, *217*, 119557. https://www.sciencedirect.com/science/article/pii/S0957417423000581
+7. Visengeriyeva, L., Kammer, A., Bär, I., Kniesz, A., y Plöd, M. (2023). CRISP-ML(Q). The ML Lifecycle Process. MLOps. INNOQ.
 
-Usman, T. M., Saheed, Y. K., Ignace, D., & Nsang, A. (2023). Diabetic retinopathy detection using principal component analysis multi-label feature extraction and classification. *International Journal of Cognitive Computing in Engineering*, *4*, 78–88. https://www.sciencedirect.com/science/article/pii/S2666307423000050
+8. Voxel51, Inc. (2024). FiftyOne documentation. https://docs.voxel51.com
 
-Zaharia, M., Chen, A., Davidson, A., Ghodsi, A., Hong, S. A., Konwinski, A., ... & Zumar, C. (2018). Accelerating the machine learning lifecycle with MLflow. *IEEE Data Eng. Bull.*, *41*(4), 39-45. https://people.eecs.berkeley.edu/~alig/papers/mlflow.pdf
+9. Zaharia, M., Chen, A., Davidson, A., Ghodsi, A., Hong, S. A., Konwinski, A., ... & Zumar, C.
+(2018). Accelerating the machine learning lifecycle with MLflow. IEEE Data Eng. Bull., 41(4), 39-45. https://people.eecs.berkeley.edu/~alig/papers/mlflow.pdf
