@@ -41,10 +41,12 @@ Contains all dataset files:
 
 Main Python package containing all project code:
 
-- **`preprocessing/`**: Dataset preprocessing scripts
-  - `preprocess_ddr2019.py`: DDR2019 dataset preprocessing
-  - `base.py`: Base preprocessing utilities
-  - `utils.py`: Helper functions
+- **`preprocessing/`**: Dataset preprocessing (registry + middleware, OpenCV BGR)
+  - `__init__.py`: CLI entry, two-phase parse, preprocessor lookup
+  - `base.py`: BasePreprocessor, BasePreprocessorConfig, preprocessor registry, run_core_loop()
+  - `middleware.py`: BaseMiddleware, middleware registry (default, paper_dual, resize_norm)
+  - `preprocess_ddr2019.py`: Ddr2019Preprocessor (keyword `ddr2019`), convert_labels_csv()
+  - `utils.py`: load_image_bgr, save_image_bgr, resize_bgr, add_padding_to_square_bgr
 
 - **`datasets/`**: PyTorch Dataset classes for data loading
 
