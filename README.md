@@ -66,7 +66,7 @@ For detailed testing documentation, including running specific tests, using mark
 
 ## Preprocessing
 
-The project includes a preprocessing module for preparing diabetic retinopathy datasets. Currently supports the DDR2019 dataset.
+The project includes a preprocessing module for preparing diabetic retinopathy datasets. Currently supports the DDR2019 dataset. The pipeline uses a **preprocessor registry** (first CLI argument is a keyword, e.g. `ddr2019`) and **middleware** (per-image transforms; built-in: default, paper_dual, resize_norm). Image I/O uses OpenCV BGR; defaults live in `sam_ml/config.py`.
 
 ### Quick Start
 
@@ -85,14 +85,16 @@ uv run preprocess-dataset ddr2019 --output-name ddr2019_384 --target-size 384 38
 
 ### Features
 
-- **Minimum Size Filtering**: Only processes images with both dimensions >= 512x512
-- **Automatic Padding**: Non-square images are padded to square (black padding)
-- **No Upscaling**: Images are only downscaled or kept at same size (never upscaled to avoid noise)
-- **Standardized Output**: All processed images are resized to 512x512
-- **Label Synchronization**: CSV labels are automatically filtered to match processed images
-- **Original Data Protection**: Original dataset files are never modified
+- **Preprocessor and middleware registries**: Extensible by keyword; add custom preprocessors and middlewares (see [Preprocessing Documentation](docs/preprocessing.md)).
+- **Minimum size filtering**: Only processes images with both dimensions >= 512x512 (configurable).
+- **Automatic padding**: Non-square images are padded to square (black padding).
+- **No upscaling**: Images are only downscaled or kept at same size (never upscaled to avoid noise).
+- **Standardized output**: All processed images are resized to the target size (default 512×512).
+- **Optional middlewares**: Use `--middleware paper_dual` for CLAHE/CECED variants or `--middleware resize_norm` for resize+normalize.
+- **Label synchronization**: CSV labels are automatically filtered to match processed images.
+- **Original data protection**: Original dataset files are never modified.
 
-For complete preprocessing documentation, including detailed usage, pipeline explanation, and troubleshooting, see [Preprocessing Documentation](docs/preprocessing.md).
+For complete preprocessing documentation, including workflow, registry, custom preprocessors/middlewares, and troubleshooting, see [Preprocessing Documentation](docs/preprocessing.md).
 
 ## Modeling
 
