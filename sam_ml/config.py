@@ -174,6 +174,16 @@ class PreprocessingConfig(BaseSettings):
         description="DDR2019 processed output directory",
     )
 
+    # Middleware and preprocessor defaults
+    default_middleware: str = Field(
+        default="default",
+        description="Default middleware key for image preprocessing (e.g. 'default', 'paper_dual')",
+    )
+    default_output_subdir: str = Field(
+        default="images",
+        description="Default subdirectory name under processed_dir for middleware output (single-output pipelines)",
+    )
+
     @field_validator("target_size")
     @classmethod
     def validate_target_size(cls, v: Tuple[int, int]) -> Tuple[int, int]:

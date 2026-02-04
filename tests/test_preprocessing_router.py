@@ -11,6 +11,8 @@ import pytest
 from PIL import Image
 
 from sam_ml.preprocessing import main
+from sam_ml.preprocessing.base import get_preprocessor, list_preprocessors
+from sam_ml.preprocessing.middleware import list_middlewares
 
 
 @pytest.fixture
@@ -117,30 +119,29 @@ class TestPreprocessingRouter:
     
     def test_main_ddr2019_default_paths(self, temp_dir):
         """Test DDR2019 preprocessing with default paths (requires actual data)."""
-        # This test would require the actual data structure
-        # For now, we'll test that it fails gracefully with missing data
-        with patch("sam_ml.preprocessing.preprocess_ddr2019.preprocess_ddr2019") as mock_preprocess:
-            mock_preprocess.side_effect = FileNotFoundError("Raw images directory not found")
-            
+        # Mock the preprocessor's run to avoid requiring actual data
+        with patch(
+            "sam_ml.preprocessing.preprocess_ddr2019.Ddr2019Preprocessor.run"
+        ) as mock_run:
+            mock_run.side_effect = FileNotFoundError("Raw images directory not found")
+
             exit_code = main(["ddr2019"])
-            
+
             assert exit_code == 1
     
     def test_main_invalid_dataset(self, capsys):
         """Test that invalid dataset name is rejected."""
-        # argparse will raise SystemExit for invalid choice
-        with pytest.raises(SystemExit):
-            main(["invalid_dataset"])
-        
-        # Check that error message is displayed
+        exit_code = main(["invalid_dataset"])
+        assert exit_code == 1
         captured = capsys.readouterr()
-        # argparse shows error to stderr
-        assert "invalid choice" in captured.err.lower() or "invalid_dataset" in captured.err
+        assert "not found" in captured.err.lower() or "invalid" in captured.err.lower()
     
-    def test_main_missing_dataset_argument(self):
-        """Test that missing dataset argument shows help."""
-        with pytest.raises(SystemExit):
-            main([])
+    def test_main_missing_dataset_argument(self, capsys):
+        """Test that missing dataset argument returns error."""
+        exit_code = main([])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "missing" in captured.err.lower() or "dataset" in captured.err.lower()
     
     def test_main_error_handling(self, temp_dir):
         """Test error handling when preprocessing fails."""

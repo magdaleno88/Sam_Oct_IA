@@ -256,13 +256,13 @@ class BaseLightningModel(LightningModule):
             )
         
         # Configure learning rate scheduler from config
+        # Note: verbose is deprecated in ReduceLROnPlateau; use get_last_lr() if needed
         scheduler_config = get_scheduler_config()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode=scheduler_config.mode,
             factor=scheduler_config.factor,
             patience=scheduler_config.patience,
-            verbose=scheduler_config.verbose,
         )
         
         return {
