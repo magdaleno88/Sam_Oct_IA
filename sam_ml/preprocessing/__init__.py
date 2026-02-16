@@ -7,6 +7,7 @@ from typing import Optional
 
 # Import preprocessor modules so they register with PREPROCESSOR_REGISTRY
 from sam_ml.preprocessing import preprocess_ddr2019  # noqa: F401
+from sam_ml.preprocessing import preprocess_ddr2019_dualfilters  # noqa: F401
 
 from sam_ml.config import get_preprocessing_config
 from sam_ml.preprocessing.base import (
@@ -25,7 +26,9 @@ def _build_config_from_args(parsed: argparse.Namespace, keyword: str) -> BasePre
             base_processed = config.ddr2019_processed_dir.parent
             processed_dir = str(Path(base_processed) / parsed.output_name)
         else:
-            processed_dir = str(config.ddr2019_processed_dir)
+            # Default: data/processed/<preprocessor keyword>
+            base_processed = config.ddr2019_processed_dir.parent
+            processed_dir = str(Path(base_processed) / keyword)
 
     return BasePreprocessorConfig(
         raw_img_dir=getattr(parsed, "raw_img_dir", str(config.ddr2019_raw_img_dir)),
@@ -98,7 +101,11 @@ Examples:
     parsed = phase2_parser.parse_args(args)
 
     try:
-        preprocessor_config = _build_config_from_args(parsed, keyword)
+        build_config = getattr(preprocessor_cls, "build_config_from_args", None)
+        if callable(build_config):
+            preprocessor_config = build_config(parsed)
+        else:
+            preprocessor_config = _build_config_from_args(parsed, keyword)
         preprocessor = preprocessor_cls()
         print(f"Starting preprocessing for dataset: {keyword}")
 

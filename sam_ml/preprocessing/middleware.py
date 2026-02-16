@@ -13,6 +13,8 @@ class MiddlewareContext(TypedDict, total=False):
 
     min_size: int
     target_size: tuple[int, int]
+    clahe_target_size: tuple[int, int]
+    ceced_target_size: tuple[int, int]
 
 
 # Registry: key -> middleware class (not instance)
@@ -118,7 +120,7 @@ class PaperDualMiddleware(BaseMiddleware):
 
     Returns three outputs: output_key (resized original), output_key + '_clahe',
     output_key + '_ceced'. Uses apply_clahe_bgr and apply_ceced_bgr from
-    sam_ml.datasets.utils.filters (requires OpenCV).
+    sam_ml.preprocessing.filters (requires OpenCV).
     """
 
     def __init__(
@@ -148,7 +150,7 @@ class PaperDualMiddleware(BaseMiddleware):
             return []
         resized = resize_bgr(img_square, target_size[0], target_size[1])
 
-        from sam_ml.datasets.utils.filters import apply_clahe_bgr, apply_ceced_bgr
+        from sam_ml.preprocessing.filters import apply_clahe_bgr, apply_ceced_bgr
 
         clahe_bgr = apply_clahe_bgr(resized)
         ceced_bgr = apply_ceced_bgr(resized)
@@ -156,6 +158,64 @@ class PaperDualMiddleware(BaseMiddleware):
             (self.output_key, resized),
             (f"{self.output_key}_clahe", clahe_bgr),
             (f"{self.output_key}_ceced", ceced_bgr),
+        ]
+
+
+@register_middleware("dual_filters_multisize")
+class DualFiltersMultisizeMiddleware(BaseMiddleware):
+    """Produce synchronized CLAHE and CECED outputs with different target sizes."""
+
+    def __init__(
+        self,
+        min_size: int = 512,
+        clahe_target_size: tuple[int, int] = (299, 299),
+        ceced_target_size: tuple[int, int] = (224, 224),
+        clahe_output_key: str = "images_clahe",
+        ceced_output_key: str = "images_ceced",
+    ) -> None:
+        self.min_size = min_size
+        self.clahe_target_size = clahe_target_size
+        self.ceced_target_size = ceced_target_size
+        self.clahe_output_key = clahe_output_key
+        self.ceced_output_key = ceced_output_key
+
+    def process(
+        self,
+        img_bgr: np.ndarray,
+        filename: str,
+        context: MiddlewareContext,
+    ) -> list[tuple[str, np.ndarray]]:
+        min_size = context.get("min_size", self.min_size)
+        clahe_target_size = context.get("clahe_target_size", self.clahe_target_size)
+        ceced_target_size = context.get("ceced_target_size", self.ceced_target_size)
+
+        # Enforce no-upscaling for either branch.
+        max_target = max(
+            clahe_target_size[0],
+            clahe_target_size[1],
+            ceced_target_size[0],
+            ceced_target_size[1],
+        )
+
+        h, w = img_bgr.shape[:2]
+        if w < min_size or h < min_size:
+            return []
+
+        img_square = add_padding_to_square_bgr(img_bgr)
+        ch, cw = img_square.shape[:2]
+        if ch < max_target or cw < max_target:
+            return []
+
+        from sam_ml.preprocessing.filters import apply_clahe_bgr, apply_ceced_bgr
+
+        clahe_resized = resize_bgr(img_square, clahe_target_size[0], clahe_target_size[1])
+        ceced_resized = resize_bgr(img_square, ceced_target_size[0], ceced_target_size[1])
+
+        clahe_bgr = apply_clahe_bgr(clahe_resized)
+        ceced_bgr = apply_ceced_bgr(ceced_resized)
+        return [
+            (self.clahe_output_key, clahe_bgr),
+            (self.ceced_output_key, ceced_bgr),
         ]
 
 
