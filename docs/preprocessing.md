@@ -126,6 +126,7 @@ uv run preprocess-dataset ddr2019 --output-name ddr2019_384 --target-size 384 38
 ## Available Datasets
 
 - `ddr2019` - DDR2019 Diabetic Retinopathy dataset
+- `ddr2019_dualfilters` - DDR2019 export with synchronized CLAHE/CECED folders + dual mapping CSV
 
 ## Preprocessing Pipeline
 
@@ -150,7 +151,7 @@ uv run preprocess-dataset <dataset_name> [options]
 
 ### Arguments
 
-- `dataset_name`: Name of the dataset to process (currently only `ddr2019`)
+- `dataset_name`: Name of the dataset to process (`ddr2019` or `ddr2019_dualfilters`)
 
 ### Options (DDR2019 preprocessor)
 
@@ -161,6 +162,19 @@ uv run preprocess-dataset <dataset_name> [options]
 - `--min-size SIZE`: Minimum image size in pixels (default: 512)
 - `--target-size WIDTH HEIGHT`: Target image size after processing (default: 512 512)
 - `--middleware NAME`: Middleware key for image processing: `default` (resize only), `paper_dual` (resized + CLAHE + CECED), `resize_norm` (default: from config)
+
+### Options (`ddr2019_dualfilters` preprocessor)
+
+- `--raw-img-dir PATH`: Path to raw images directory (default: from config)
+- `--raw-csv-path PATH`: Path to raw CSV labels file (default: from config)
+- `--processed-dir PATH`: Full path to output directory (overrides default and `--output-name`)
+- `--output-name FOLDER`: Output folder name under `data/processed`. Ignored if `--processed-dir` is set.
+- `--min-size SIZE`: Minimum image size in pixels (default: 512)
+- `--clahe-size WIDTH HEIGHT`: CLAHE output image size (default: 299 299)
+- `--ceced-size WIDTH HEIGHT`: CECED output image size (default: 224 224)
+- `--clahe-subdir NAME`: CLAHE output subdirectory name (default: `images_clahe`)
+- `--ceced-subdir NAME`: CECED output subdirectory name (default: `images_ceced`)
+- `--labels-filename NAME`: Dual mapping CSV filename (default: `labels_dual.csv`)
 
 ### Examples
 
@@ -184,14 +198,22 @@ uv run preprocess-dataset ddr2019 \
   --processed-dir /path/to/output \
   --min-size 512 \
   --target-size 512 512
+
+# Dual-filter export (synchronized CLAHE/CECED folders + explicit mapping CSV)
+uv run preprocess-dataset ddr2019_dualfilters \
+  --raw-img-dir /path/to/raw/images \
+  --raw-csv-path /path/to/labels.csv \
+  --processed-dir /path/to/output_dual \
+  --clahe-size 299 299 \
+  --ceced-size 224 224
 ```
 
 ## Output Structure
 
-After preprocessing, the dataset will be organized under the output directory. By default (or with `--output-name ddr2019`) the path is `data/processed/ddr2019/`. With `--output-name FOLDER` the path is `data/processed/<FOLDER>/`.
+After preprocessing, the dataset will be organized under the output directory. By default, when `--processed-dir` and `--output-name` are not provided, the output path is `data/processed/<dataset_name>/` (e.g. `data/processed/ddr2019/` or `data/processed/ddr2019_dualfilters/`). With `--output-name FOLDER`, the path is `data/processed/<FOLDER>/`.
 
 ```
-data/processed/ddr2019/          # or data/processed/<output-name>/
+data/processed/ddr2019/          # or data/processed/<dataset_name>/ or data/processed/<output-name>/
 ├── images/
 │   ├── 20170413102628830.jpg    (resized to target size)
 │   └── ...
@@ -200,6 +222,24 @@ data/processed/ddr2019/          # or data/processed/<output-name>/
 
 The `labels.csv` file contains:
 - `filename`: Image filename
+- `label`: Diagnosis label (0-4)
+
+Dual-filter export (`ddr2019_dualfilters`) output:
+
+```
+data/processed/<output-name>/
+├── images_clahe/
+│   ├── 20170413102628830.jpg    (CLAHE, default 299x299)
+│   └── ...
+├── images_ceced/
+│   ├── 20170413102628830.jpg    (CECED, default 224x224)
+│   └── ...
+└── labels_dual.csv              (clahe_path, ceced_path, label)
+```
+
+`labels_dual.csv` maps both folder paths to the same class:
+- `clahe_path`: Relative path under processed dir (e.g. `images_clahe/<filename>`)
+- `ceced_path`: Relative path under processed dir (e.g. `images_ceced/<filename>`)
 - `label`: Diagnosis label (0-4)
 
 ## Processing Statistics
@@ -255,6 +295,7 @@ The pipeline is extensible via a **preprocessor registry** (keyword → class) a
 - **Middleware registry**: Each preprocessor selects a **middleware** by name (e.g. `default`, `paper_dual`). Built-in middlewares:
   - **default**: Min-size filter, pad to square, resize to target (single output `images/`).
   - **paper_dual**: Same as default plus CLAHE and CECED variants; writes `images/`, `images_clahe/`, `images_ceced/` (requires OpenCV for filters).
+  - **dual_filters_multisize**: Synchronized CLAHE/CECED output with independent target sizes (default 299x299 and 224x224).
   - **resize_norm**: Resize and normalize; single output (BGR uint8).
 
 ### Adding a custom preprocessor

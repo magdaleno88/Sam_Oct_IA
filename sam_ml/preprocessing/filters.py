@@ -4,8 +4,8 @@ For preprocessing/filters we recommend using CLAHE (apply_clahe_bgr) to improve
 local contrast in fundus images with minimal risk of damaging prediction.
 """
 
-import cv2
 import numpy as np
+import cv2
 
 
 def apply_clahe_bgr(img_bgr: np.ndarray) -> np.ndarray:
