@@ -1,9 +1,7 @@
 """
-Patches DDR2019_PCNN_ELM.ipynb to fix the NumPy 2.x / torchvision 0.17.2 incompatibility.
-
-Two changes are made (notebook only):
-1. Prepends a setup cell that pins numpy<2.0 and restarts the kernel.
-2. Injects a numpy-free transform (torchvision.transforms.v2) into the DataLoader cell.
+Clean rewrite of the DDR2019_PCNN_ELM.ipynb patch.
+Removes any malformed setup cell, inserts a clean one, and ensures
+the DataLoader cell has the safe_transform correctly injected.
 """
 
 import json
@@ -11,139 +9,133 @@ from pathlib import Path
 
 NOTEBOOK = Path(__file__).parent.parent / "notebooks" / "DDR2019_PCNN_ELM.ipynb"
 
-# ── Cell 0: pin numpy<2.0 ────────────────────────────────────────────────────
-
-SETUP_CELL_MARKER = "# SETUP: pin numpy<2.0 for torchvision 0.17.2 compatibility"
+SETUP_MARKER = "SETUP: pin numpy<2.0"
 
 SETUP_CELL_SOURCE = [
     "# SETUP: pin numpy<2.0 for torchvision 0.17.2 compatibility\n",
     "# torchvision==0.17.2 was compiled against NumPy 1.x; NumPy 2.x breaks the ABI.\n",
-    "# This installs numpy<2.0 silently if needed, then restarts the kernel once.\n",
-    "import importlib, subprocess, sys\n",
+    "# This cell installs numpy<2.0 and restarts the kernel once if needed.\n",
+    "import subprocess, sys\n",
     "\n",
-    "def _numpy_ok() -> bool:\n",
+    "def _numpy_ok():\n",
     "    try:\n",
     "        import numpy as np\n",
-    "        return tuple(int(x) for x in np.__version__.split('.')[:2]) < (2, 0)\n",
+    "        major = int(np.__version__.split('.')[0])\n",
+    "        return major < 2\n",
     "    except Exception:\n",
     "        return False\n",
     "\n",
     "if not _numpy_ok():\n",
-    "    print('Installing numpy<2.0 …')\n",
+    "    print('Installing numpy<2.0 ...')\n",
     "    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', 'numpy<2.0', '--upgrade'])\n",
-    "    print('numpy<2.0 installed. Restarting kernel …')\n",
+    "    print('Done. Restarting kernel ...')\n",
     "    import IPython\n",
     "    IPython.get_ipython().kernel.do_shutdown(restart=True)\n",
     "else:\n",
     "    import numpy as np\n",
-    "    print(f'numpy {np.__version__} — OK (< 2.0)')\n",
+    "    print('numpy', np.__version__, '-- OK (< 2.0)')\n",
 ]
 
-# ── DataLoader cell: numpy-free transform ────────────────────────────────────
-
-OLD_DATALOADER_PREFIX = [
-    "from torch.utils.data import DataLoader\n",
-    "from sam_ml.datasets import DDR2019Dataset\n",
-    "from sam_ml.config import get_model_config, get_training_config\n",
-    "\n",
-    "model_cfg = get_model_config()\n",
-]
-
-NEW_DATALOADER_HEADER = [
+DATALOADER_CELL_SOURCE = [
     "from torch.utils.data import DataLoader\n",
     "from sam_ml.datasets import DDR2019Dataset\n",
     "from sam_ml.config import get_model_config, get_training_config\n",
     "import torchvision.transforms.v2 as T2\n",
     "\n",
-    "# FIX: torchvision 0.17.2 was compiled against NumPy 1.x, but NumPy 2.x is installed.\n",
-    "# transforms.ToTensor() crashes via torch.from_numpy(). Use transforms.v2 instead,\n",
-    "# which converts PIL images to tensors without going through numpy.\n",
+    "# FIX: Use transforms.v2 to avoid torch.from_numpy() crash with NumPy 2.x\n",
     "safe_transform = T2.Compose([\n",
-    "    T2.ToImage(),                            # PIL -> tv_tensors.Image (no numpy)\n",
+    "    T2.ToImage(),                           # PIL -> tv_tensors.Image (no numpy)\n",
     "    T2.ToDtype(torch.float32, scale=True),  # uint8 -> float32 [0, 1]\n",
     "])\n",
     "\n",
     "model_cfg = get_model_config()\n",
+    "train_cfg = get_training_config()\n",
+    "\n",
+    "TRAIN_RATIO = 0.8\n",
+    "VAL_RATIO = 0.2\n",
+    "RANDOM_STATE = 42\n",
+    "\n",
+    "train_ds = DDR2019Dataset(data_dir, split=\"train\", train_ratio=TRAIN_RATIO, val_ratio=VAL_RATIO, random_state=RANDOM_STATE, transform=safe_transform)\n",
+    "val_ds   = DDR2019Dataset(data_dir, split=\"val\",   train_ratio=TRAIN_RATIO, val_ratio=VAL_RATIO, random_state=RANDOM_STATE, transform=safe_transform)\n",
+    "\n",
+    "train_loader = DataLoader(\n",
+    "    train_ds,\n",
+    "    batch_size=train_cfg.batch_size,\n",
+    "    shuffle=True,\n",
+    "    num_workers=0,\n",
+    ")\n",
+    "\n",
+    "val_loader = DataLoader(\n",
+    "    val_ds,\n",
+    "    batch_size=train_cfg.batch_size,\n",
+    "    shuffle=False,\n",
+    "    num_workers=0,\n",
+    ")\n",
+    "print(\"train:\", len(train_ds), \"val:\", len(val_ds), \"num_classes:\", model_cfg.num_classes)\n",
 ]
 
 
-def _already_has_setup_cell(nb: dict) -> bool:
-    for cell in nb["cells"]:
-        if cell.get("cell_type") == "code":
-            if any(SETUP_CELL_MARKER in line for line in cell.get("source", [])):
-                return True
-    return False
+def make_code_cell(source, cell_id="patched-cell"):
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "id": cell_id,
+        "metadata": {},
+        "outputs": [],
+        "source": source,
+    }
 
 
-def _patch_dataloader_cell(nb: dict) -> bool:
-    for cell in nb["cells"]:
+def patch_notebook():
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    cells = nb["cells"]
+
+    # ── 1) Remove any existing (possibly malformed) setup cells ──────────────
+    cells[:] = [
+        c for c in cells
+        if not (
+            c.get("cell_type") == "code"
+            and SETUP_MARKER in "".join(c.get("source", []))
+        )
+    ]
+    print("Removed old setup cell(s) if any.")
+
+    # ── 2) Insert fresh setup cell at position 0 ─────────────────────────────
+    cells.insert(0, make_code_cell(SETUP_CELL_SOURCE, "00-numpy-setup"))
+    print("Inserted clean setup cell at position 0.")
+
+    # ── 3) Replace DataLoader cell ────────────────────────────────────────────
+    patched = False
+    for cell in cells:
         if cell.get("cell_type") != "code":
             continue
-        src = cell["source"]
-        joined = "".join(src)
-        if (
-            "from sam_ml.datasets import DDR2019Dataset\n" in joined
-            and "get_model_config" in joined
-            and "import torchvision.transforms.v2 as T2\n" not in joined  # not yet patched
-        ):
-            # Build new source: replace the header, keep the rest (DataLoaders + print)
-            old_header_len = len(OLD_DATALOADER_PREFIX)
-            # Find the index where old header ends in src
-            if src[:old_header_len] == OLD_DATALOADER_PREFIX:
-                cell["source"] = NEW_DATALOADER_HEADER + src[old_header_len:]
-            else:
-                # Fallback: rebuild from full source string
-                rest = joined.replace(
-                    "".join(OLD_DATALOADER_PREFIX),
-                    "".join(NEW_DATALOADER_HEADER),
-                    1,
-                )
-                cell["source"] = rest.splitlines(keepends=True)
-
-            # Replace dataset constructor calls to pass transform=safe_transform
-            new_src = []
-            for line in cell["source"]:
-                if "DDR2019Dataset(data_dir," in line and "transform=" not in line:
-                    line = line.rstrip()
-                    if line.endswith(")"):
-                        line = line[:-1] + ", transform=safe_transform)\n"
-                    else:
-                        line = line + "  # transform injected below\n"
-                new_src.append(line)
-            cell["source"] = new_src
-
+        src = "".join(cell.get("source", []))
+        if "DDR2019Dataset" in src and "get_model_config" in src:
+            cell["source"] = DATALOADER_CELL_SOURCE
             cell["outputs"] = []
             cell["execution_count"] = None
-            return True
-    return False
+            patched = True
+            print("Replaced DataLoader cell.")
+            break
 
+    if not patched:
+        print("WARNING: DataLoader cell not found!")
 
-def patch_notebook() -> None:
-    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
-
-    # 1) Add setup cell if missing
-    if _already_has_setup_cell(nb):
-        print("ℹ️  Setup cell already present.")
-    else:
-        setup_cell = {
-            "cell_type": "code",
-            "execution_count": None,
-            "id": "00000000-setup-numpy-pin",
-            "metadata": {},
-            "outputs": [],
-            "source": SETUP_CELL_SOURCE,
-        }
-        nb["cells"].insert(0, setup_cell)
-        print("✅ Inserted numpy<2.0 setup cell at position 0.")
-
-    # 2) Patch DataLoader cell
-    if _patch_dataloader_cell(nb):
-        print("✅ Patched DataLoader cell with safe_transform.")
-    else:
-        print("ℹ️  DataLoader cell already patched or not found.")
-
+    # ── 4) Save ───────────────────────────────────────────────────────────────
+    nb["cells"] = cells
     NOTEBOOK.write_text(json.dumps(nb, indent=1, ensure_ascii=False), encoding="utf-8")
-    print(f"💾 Saved {NOTEBOOK}")
+    print(f"Saved: {NOTEBOOK}")
+
+    # ── 5) Verify: print cell sources for inspection ──────────────────────────
+    print("\n--- SETUP CELL ---")
+    print("".join(cells[0]["source"]))
+
+    for c in cells:
+        src_str = "".join(c.get("source", []))
+        if "DDR2019Dataset" in src_str and "get_model_config" in src_str:
+            print("--- DATALOADER CELL ---")
+            print(src_str)
+            break
 
 
 if __name__ == "__main__":
