@@ -93,6 +93,9 @@ uv run train-model --help
 
 # Train a model
 uv run train-model --model simple_cnn --num-classes 5 --learning-rate 1e-4 --num-epochs 50
+
+# Train the dual-channel model (CLAHE + CECED export)
+uv run train-model --model dual_channel --dataset ddr2019_dualfilters --data-dir data/processed/ddr2019_dualfilters
 ```
 
 **Available options:**

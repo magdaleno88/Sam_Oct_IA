@@ -74,8 +74,12 @@ def main() -> None:
     parser.add_argument(
         "--data-dir",
         type=str,
-        default=str(training_config.data_dir),
-        help=f"Directory containing processed dataset (default: {training_config.data_dir})",
+        default=None,
+        help=(
+            "Directory containing processed dataset. "
+            f"Defaults to {training_config.data_dir} for ddr2019 and "
+            "data/processed/ddr2019_dualfilters for ddr2019_dualfilters."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -95,8 +99,23 @@ def main() -> None:
         default=training_config.patience,
         help=f"Early stopping patience (default: {training_config.patience})",
     )
+
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="ddr2019",
+        choices=["ddr2019", "ddr2019_dualfilters"],
+        help="Dataset format to load (single images vs dual CLAHE/CECED export).",
+    )
     
     args = parser.parse_args()
+
+    # Resolve default data_dir based on dataset selection.
+    if args.data_dir is None:
+        if args.dataset == "ddr2019_dualfilters":
+            args.data_dir = "data/processed/ddr2019_dualfilters"
+        else:
+            args.data_dir = str(training_config.data_dir)
     
     # Validate model key
     available_models = list_models()
@@ -170,24 +189,40 @@ def main() -> None:
         log_every_n_steps=10,
     )
     
-    # Load datasets using DDR2019Dataset (processed layout: data_dir/labels.csv, data_dir/images/)
-    from sam_ml.datasets import DDR2019Dataset
+    # Load datasets
+    from sam_ml.datasets import DDR2019Dataset, DDR2019DualFiltersDataset
     from torch.utils.data import DataLoader
 
-    train_dataset = DDR2019Dataset(
-        data_dir=args.data_dir,
-        split="train",
-        train_ratio=0.8,
-        val_ratio=0.2,
-        random_state=42,
-    )
-    val_dataset = DDR2019Dataset(
-        data_dir=args.data_dir,
-        split="val",
-        train_ratio=0.8,
-        val_ratio=0.2,
-        random_state=42,
-    )
+    if args.dataset == "ddr2019_dualfilters":
+        train_dataset = DDR2019DualFiltersDataset(
+            data_dir=args.data_dir,
+            split="train",
+            train_ratio=0.8,
+            val_ratio=0.2,
+            random_state=42,
+        )
+        val_dataset = DDR2019DualFiltersDataset(
+            data_dir=args.data_dir,
+            split="val",
+            train_ratio=0.8,
+            val_ratio=0.2,
+            random_state=42,
+        )
+    else:
+        train_dataset = DDR2019Dataset(
+            data_dir=args.data_dir,
+            split="train",
+            train_ratio=0.8,
+            val_ratio=0.2,
+            random_state=42,
+        )
+        val_dataset = DDR2019Dataset(
+            data_dir=args.data_dir,
+            split="val",
+            train_ratio=0.8,
+            val_ratio=0.2,
+            random_state=42,
+        )
 
     train_loader = DataLoader(
         train_dataset,

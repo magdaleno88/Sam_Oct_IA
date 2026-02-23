@@ -10,24 +10,17 @@ description = "A computer vision project to aid in the diagnosis of diabetic ret
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    # NumPy: Pin to 1.x for macOS Intel (PyTorch 2.2.2 compatibility), use latest for other platforms
-    "numpy<2.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "numpy>=2.0; sys_platform != 'darwin' or platform_machine != 'x86_64'", # Compatible with numpy<2.0 (required by tensorflow 2.16.2)
     "pandas>=2.0.0", # Required for CSV processing in preprocessing
     "pillow>=10.0.0", # Required for PIL Image support (used by datasets library)
     "tqdm>=4.66.0", # Progress bars for long-running operations
-    # PyTorch: Pin to 2.2.2 for macOS Intel (x86_64) compatibility
-    # PyTorch 2.3.0+ no longer provides macOS Intel wheels
-    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torchvision==0.17.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    # For other platforms (ARM64 Mac, Linux, Windows), allow newer versions
-    "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "torchvision>=0.17.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "opencv-python-headless>=4.11.0.86",
     "pytorch-lightning>=2.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    "seaborn[notebook]>=0.13.2",
-    "opencv-python-headless>=4.11.0.86",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "scikit-learn>=1.8.0",
+    "xgboost>=3.2.0",
 ]
 
 [project.scripts]
@@ -50,6 +43,7 @@ test = [
 notebook = [
     "jupyter>=1.0.0",
     "matplotlib>=3.8.0",
+    "seaborn[notebook]>=0.13.2",
 ]
 
 # FiftyOne (Voxel51) for dataset visualization and curation
