@@ -194,3 +194,7 @@ outputs/
 # Data files
 data/raw/*
 data/processed/*
+
+# Ignored files
+constraints.txt
+lighting logs/
