@@ -5,6 +5,7 @@ from sam_ml.modeling.models.registry import get_model, list_models, register_mod
 
 # Import models to register them
 from sam_ml.modeling.models import simple_cnn_lightning  # noqa: F401
+from sam_ml.modeling.models import dual_channel_model_lightning  # noqa: F401
 
 __all__ = [
     "BaseLightningModel",
