@@ -11,7 +11,13 @@ from PIL import Image
 
 from sam_ml.oct.config import OCTConfig
 from sam_ml.oct.constants import CLASS_NAMES, CLASS_TO_INDEX
-from sam_ml.oct.data import audit_dataset, create_manifests, infer_patient_id, validate_no_leakage
+from sam_ml.oct.data import (
+    audit_dataset,
+    create_manifests,
+    infer_patient_id,
+    load_dataset_splits,
+    validate_no_leakage,
+)
 from sam_ml.oct.dataset import OCTManifestDataset, build_oct_transform
 from sam_ml.oct.ensemble import average_probabilities, sequential_ensemble_predict
 from sam_ml.oct.explain import occlusion_sensitivity
@@ -91,6 +97,44 @@ def test_train_validation_split_is_reproducible_and_test_is_untouched(tmp_path):
     pd.testing.assert_frame_equal(
         first["test"].reset_index(drop=True), second["test"].reset_index(drop=True)
     )
+
+
+def test_automatic_train_test_split_stays_in_memory(tmp_path):
+    root = tmp_path / "raw"
+    _official_dataset(root)
+    config = OCTConfig()
+    config.data.root = root
+    config.data.manifest_dir = tmp_path / "manifests"
+    config.data.exclusions_file = config.data.manifest_dir / "excluded_images.csv"
+
+    splits, source = load_dataset_splits(config)
+
+    assert source == "in-memory"
+    assert set(splits) == {"train", "val", "test"}
+    assert set(splits["train"]["patient_id"]).isdisjoint(splits["val"]["patient_id"])
+    assert len(splits["test"]) == 4
+    assert not config.data.manifest_dir.exists()
+
+
+def test_existing_manifests_take_priority_over_automatic_split(tmp_path):
+    root = tmp_path / "raw"
+    _official_dataset(root)
+    config = OCTConfig()
+    config.data.root = root
+    config.data.manifest_dir = tmp_path / "manifests"
+    config.data.exclusions_file = config.data.manifest_dir / "excluded_images.csv"
+    expected = create_manifests(config)
+
+    config.data.root = tmp_path / "dataset-does-not-exist"
+    loaded, source = load_dataset_splits(config)
+
+    assert source == "manifest"
+    for name in ("train", "val", "test"):
+        pd.testing.assert_frame_equal(
+            expected[name].reset_index(drop=True),
+            loaded[name].reset_index(drop=True),
+            check_dtype=False,
+        )
 
 
 def test_missing_patient_id_requires_explicit_image_split_opt_in(tmp_path):

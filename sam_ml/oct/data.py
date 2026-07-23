@@ -187,23 +187,20 @@ def audit_dataset(
 
 
 def _group_holdout(frame: pd.DataFrame, fraction: float, seed: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Select a reproducible class-stratified holdout while keeping patients intact.
-
-    The requested fraction is applied to patient groups inside every class. Image counts can
-    differ slightly from the requested percentage because a patient is never split.
-    """
-    rng = np.random.default_rng(seed)
-    holdout_patients: set[str] = set()
-    for label, class_frame in frame.groupby("label", sort=True):
-        patients = np.asarray(sorted(class_frame["patient_id"].astype(str).unique()))
-        if len(patients) < 2:
-            raise ValueError(
-                f"Patient-level split requires at least two patient groups for class {label}"
-            )
-        count = min(len(patients) - 1, max(1, round(len(patients) * fraction)))
-        holdout_patients.update(rng.choice(patients, size=count, replace=False).tolist())
-    holdout_mask = frame["patient_id"].astype(str).isin(holdout_patients)
-    return frame.loc[~holdout_mask].copy(), frame.loc[holdout_mask].copy()
+    """Use StratifiedGroupKFold for a reproducible, patient-level stratified holdout."""
+    groups_per_class = frame.groupby("label")["patient_id"].nunique()
+    min_groups = int(groups_per_class.min())
+    if min_groups < 2:
+        raise ValueError("Patient-level split requires at least two patient groups per class")
+    requested_splits = max(2, round(1 / fraction))
+    n_splits = min(requested_splits, min_groups)
+    splitter = StratifiedGroupKFold(
+        n_splits=n_splits, shuffle=True, random_state=seed,
+    )
+    train_idx, holdout_idx = next(
+        splitter.split(frame, frame["label"], frame["patient_id"])
+    )
+    return frame.iloc[train_idx].copy(), frame.iloc[holdout_idx].copy()
 
 
 def _image_holdout(frame: pd.DataFrame, fraction: float, seed: int) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -259,6 +256,24 @@ def create_manifests(
     frame = discover_images(config.data.root, progress_disabled=progress_disabled)
     if show_stages:
         stage(f"Se encontraron {len(frame):,} registros.")
+    manifests = split_dataset_frame(
+        config, frame, progress_disabled=progress_disabled, show_stages=show_stages,
+    )
+    config.data.manifest_dir.mkdir(parents=True, exist_ok=True)
+    if show_stages:
+        stage("Escribiendo manifiestos...")
+    for name, subset in manifests.items():
+        subset.to_csv(config.data.manifest_dir / f"{name}.csv", index=False)
+    return manifests
+
+
+def split_dataset_frame(
+    config: OCTConfig,
+    frame: pd.DataFrame,
+    progress_disabled: bool = True,
+    show_stages: bool = False,
+) -> dict[str, pd.DataFrame]:
+    """Split a discovered dataset entirely in memory without modifying its files."""
     if frame.empty:
         raise FileNotFoundError(f"No OCT images found under {config.data.root}")
     exclusions = _read_exclusions(config.data.exclusions_file)
@@ -301,12 +316,57 @@ def create_manifests(
         manifests, require_patients=grouped,
         progress_disabled=progress_disabled,
     )
-    config.data.manifest_dir.mkdir(parents=True, exist_ok=True)
-    if show_stages:
-        stage("Escribiendo manifiestos...")
-    for name, subset in manifests.items():
-        subset.to_csv(config.data.manifest_dir / f"{name}.csv", index=False)
     return manifests
+
+
+def load_dataset_splits(
+    config: OCTConfig,
+    progress_disabled: bool = True,
+) -> tuple[dict[str, pd.DataFrame], str]:
+    """Load existing manifests, or discover and split train/test entirely in memory.
+
+    Existing train/val/test CSVs retain priority for backward compatibility. When none exist,
+    the dataset must expose train and test directories; validation is derived only from train.
+    """
+    paths = {
+        name: config.data.manifest_dir / f"{name}.csv"
+        for name in ("train", "val", "test")
+    }
+    existing = {name for name, path in paths.items() if path.exists()}
+    if existing:
+        if existing != set(paths):
+            missing = sorted(set(paths) - existing)
+            raise FileNotFoundError(
+                "Incomplete manifest set. Remove the partial manifests to use automatic "
+                f"in-memory splitting, or create the missing files: {missing}"
+            )
+        manifests = {name: pd.read_csv(path) for name, path in paths.items()}
+        validate_no_leakage(
+            manifests,
+            require_patients=(
+                config.data.patient_level_split and not config.data.allow_image_level_split
+            ),
+            progress_disabled=progress_disabled,
+        )
+        return manifests, "manifest"
+
+    frame = discover_images(config.data.root, progress_disabled=progress_disabled)
+    discovered_splits = set(frame["split"]) if not frame.empty else set()
+    if "train" not in discovered_splits or "test" not in discovered_splits:
+        raise ValueError(
+            "Automatic in-memory splitting requires dataset directories train/ and test/. "
+            "Existing train.csv, val.csv and test.csv can be used for other layouts."
+        )
+    unexpected = discovered_splits - {"train", "test"}
+    if unexpected:
+        raise ValueError(
+            "Automatic mode expects only train/ and test/ directories; "
+            f"found additional splits: {sorted(unexpected)}"
+        )
+    return (
+        split_dataset_frame(config, frame, progress_disabled=progress_disabled),
+        "in-memory",
+    )
 
 
 def manifest_sha256(path: str | Path) -> str:

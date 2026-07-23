@@ -238,7 +238,7 @@ el modo por imagen requiere autorización explícita y queda etiquetado como rie
 3. Crear una muestra porcentual, si se necesita
 4. Volver a contar la distribución
 5. Evaluar si train requiere balanceo
-6. Crear o validar manifests
+6. Entrenar; validation se crea automáticamente en memoria
 7. Preprocesar y revisar controles de calidad
 8. Visualizar transformaciones
 9. Entrenar baseline e improved ResNet50
@@ -383,34 +383,21 @@ uv run python scripts/balance_dataset.py `
   --seed 42
 ```
 
-## 5. Creación de splits
+## 5. Separación automática en memoria
 
-```powershell
-uv run python scripts/create_splits.py `
-  --config configs/oct.yaml
-```
+No es necesario ejecutar `scripts/create_splits.py`. Al iniciar `train_oct.py`, el proyecto:
 
-Genera:
+- Detecta automáticamente las carpetas `train/` y `test/`.
+- Conserva el test oficial sin modificarlo.
+- Obtiene validation únicamente desde train usando `data.val_fraction`.
+- Separa por paciente y de forma estratificada por clase.
+- No crea `train.csv`, `val.csv` ni `test.csv`.
+- Falla si no puede inferir pacientes, salvo que `allow_image_level_split` se habilite
+  explícitamente.
 
-```text
-data/manifests/train.csv
-data/manifests/val.csv
-data/manifests/test.csv
-```
-
-Columnas:
-
-```text
-image_path, label, class_index, patient_id, source, split
-```
-
-Reglas:
-
-- Si existe un test oficial, se conserva.
-- Validation se obtiene únicamente de train.
-- Ningún paciente puede aparecer en varios splits.
-- Los hashes exactos tampoco pueden cruzar splits.
-- Test no participa en selección de hiperparámetros.
+Los manifiestos existentes siguen siendo compatibles y tienen prioridad. El comando
+`scripts/create_splits.py` permanece disponible únicamente para flujos que necesiten materializar
+los CSV.
 
 ## 6. Preprocesamiento OCT
 
@@ -514,6 +501,7 @@ uv run python scripts/train_oct.py `
 
 Entrenamiento:
 
+- Creación automática de validation en memoria cuando el dataset solo contiene train/test.
 - AdamW.
 - Learning rate inicial `1e-5`.
 - Cross-entropy o focal loss configurable.

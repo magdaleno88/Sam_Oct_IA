@@ -21,7 +21,7 @@ from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from sam_ml.oct.config import OCTConfig
-from sam_ml.oct.data import manifest_sha256
+from sam_ml.oct.data import load_dataset_splits, manifest_sha256
 from sam_ml.oct.dataset import OCTManifestDataset, build_oct_transform
 from sam_ml.oct.models import create_oct_model
 
@@ -88,7 +88,11 @@ def _class_weights(frame: pd.DataFrame) -> list[float]:
     return (len(frame) / (4 * counts)).tolist()
 
 
-def _environment(config: OCTConfig, manifest_dir: Path) -> dict[str, object]:
+def _environment(
+    config: OCTConfig,
+    manifest_dir: Path,
+    split_source: str,
+) -> dict[str, object]:
     packages = {}
     for package in ("torch", "torchvision", "pytorch-lightning", "pandas", "scikit-learn"):
         try:
@@ -99,12 +103,18 @@ def _environment(config: OCTConfig, manifest_dir: Path) -> dict[str, object]:
         commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     except Exception:
         commit = None
+    manifest_hashes = {
+        name: manifest_sha256(manifest_dir / f"{name}.csv")
+        for name in ("train", "val", "test")
+        if (manifest_dir / f"{name}.csv").exists()
+    }
     return {
         "created_at": datetime.now(timezone.utc).isoformat(), "seed": config.training.seed,
         "python": sys.version, "platform": platform.platform(), "packages": packages,
         "cuda_available": torch.cuda.is_available(), "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "git_commit": commit,
-        "manifest_hashes": {name: manifest_sha256(manifest_dir / f"{name}.csv") for name in ("train", "val", "test")},
+        "split_source": split_source,
+        "manifest_hashes": manifest_hashes,
     }
 
 
@@ -117,15 +127,20 @@ def train_experiment(config: OCTConfig, experiment: str, resume: str | None = No
     for folder in ("checkpoints", "predictions", "figures", "logs"):
         (run_dir / folder).mkdir(parents=True, exist_ok=True)
     (run_dir / "config.yaml").write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
-    (run_dir / "environment.json").write_text(json.dumps(_environment(config, config.data.manifest_dir), indent=2), encoding="utf-8")
-    train_frame = pd.read_csv(config.data.manifest_dir / "train.csv")
+    splits, split_source = load_dataset_splits(config)
+    train_frame = splits["train"]
+    val_frame = splits["val"]
+    (run_dir / "environment.json").write_text(
+        json.dumps(_environment(config, config.data.manifest_dir, split_source), indent=2),
+        encoding="utf-8",
+    )
     weights = _class_weights(train_frame) if config.training.balance_mode in {"class_weights", "focal"} else None
     train_ds = OCTManifestDataset(
         train_frame, build_oct_transform(True, config.data.image_size),
         preprocessing=config.preprocessing,
     )
     val_ds = OCTManifestDataset(
-        config.data.manifest_dir / "val.csv", build_oct_transform(False, config.data.image_size),
+        val_frame, build_oct_transform(False, config.data.image_size),
         preprocessing=config.preprocessing,
     )
     sampler = None
@@ -152,6 +167,9 @@ def train_experiment(config: OCTConfig, experiment: str, resume: str | None = No
     metrics_file = Path(trainer.logger.log_dir) / "metrics.csv"
     if metrics_file.exists():
         (run_dir / "training_history.csv").write_bytes(metrics_file.read_bytes())
-    summary = {name: len(pd.read_csv(config.data.manifest_dir / f"{name}.csv")) for name in ("train", "val", "test")}
+    summary = {
+        "split_source": split_source,
+        **{name: len(frame) for name, frame in splits.items()},
+    }
     (run_dir / "dataset_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return run_dir, checkpoint.best_model_path

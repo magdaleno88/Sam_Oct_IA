@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
 from sam_ml.oct.config import load_config
+from sam_ml.oct.data import load_dataset_splits
 from sam_ml.oct.dataset import OCTManifestDataset, build_oct_transform
 from sam_ml.oct.ensemble import sequential_ensemble_predict
 from sam_ml.oct.inference import load_checkpoint_model
@@ -37,7 +37,8 @@ kwargs = {"num_classes": 4, "pretrained": False, "dropout": config.model.dropout
 if config.model.name == "improved_resnet50":
     kwargs["replace_stride_with_dilation"] = config.model.replace_stride_with_dilation
 models = [load_checkpoint_model(item, config.model.name, kwargs) for item in checkpoints]
-manifest = pd.read_csv(config.data.manifest_dir / f"{args.split}.csv")
+splits, split_source = load_dataset_splits(config)
+manifest = splits[args.split]
 dataset = OCTManifestDataset(
     manifest, build_oct_transform(False, config.data.image_size),
     preprocessing=config.preprocessing,
@@ -52,6 +53,7 @@ for images, targets in loader:
 probabilities = np.concatenate(all_probabilities)
 std = np.concatenate(all_std)
 metrics = evaluate_predictions(labels, probabilities)
+metrics["split_source"] = split_source
 metrics["bootstrap_95_ci"] = bootstrap_confidence_intervals(labels, probabilities, args.bootstrap)
 evaluation_dir = run / "evaluation" / args.split
 save_metrics(metrics, evaluation_dir / "metrics.json")
