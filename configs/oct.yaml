@@ -1,5 +1,5 @@
 data:
-  root: data/raw
+  root: /content/drive/MyDrive/Sam_Oct_IA/datasets/oct_10
   manifest_dir: data/manifests
   image_size: 224
   classes: [CNV, DME, DRUSEN, NORMAL]

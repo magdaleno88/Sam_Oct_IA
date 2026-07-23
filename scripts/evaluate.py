@@ -12,7 +12,12 @@ from sam_ml.oct.config import load_config
 from sam_ml.oct.dataset import OCTManifestDataset, build_oct_transform
 from sam_ml.oct.ensemble import sequential_ensemble_predict
 from sam_ml.oct.inference import load_checkpoint_model
-from sam_ml.oct.metrics import bootstrap_confidence_intervals, evaluate_predictions, save_metrics
+from sam_ml.oct.metrics import (
+    bootstrap_confidence_intervals,
+    evaluate_predictions,
+    save_evaluation_artifacts,
+    save_metrics,
+)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--run", required=True)
@@ -48,7 +53,8 @@ probabilities = np.concatenate(all_probabilities)
 std = np.concatenate(all_std)
 metrics = evaluate_predictions(labels, probabilities)
 metrics["bootstrap_95_ci"] = bootstrap_confidence_intervals(labels, probabilities, args.bootstrap)
-save_metrics(metrics, run / "metrics.json")
+evaluation_dir = run / "evaluation" / args.split
+save_metrics(metrics, evaluation_dir / "metrics.json")
 predictions = manifest.copy()
 predictions["predicted_index"] = probabilities.argmax(1)
 predictions["confidence"] = probabilities.max(1)
@@ -60,6 +66,16 @@ predictions["correct"] = predictions["class_index"] == predictions["predicted_in
 predictions["checkpoint"] = ";".join(checkpoints)
 (run / "predictions").mkdir(parents=True, exist_ok=True)
 predictions.to_csv(run / "predictions" / f"{args.split}.csv", index=False)
+predictions.to_json(
+    run / "predictions" / f"{args.split}.json", orient="records", indent=2,
+)
+artifacts = save_evaluation_artifacts(
+    labels, probabilities, metrics, evaluation_dir,
+)
+metrics["artifacts"] = artifacts
+save_metrics(metrics, evaluation_dir / "metrics.json")
+if args.split == "test":
+    save_metrics(metrics, run / "metrics.json")
 Path("reports").mkdir(exist_ok=True)
 predictions.to_csv("reports/error_analysis.csv", index=False)
 print(json.dumps(metrics, indent=2))

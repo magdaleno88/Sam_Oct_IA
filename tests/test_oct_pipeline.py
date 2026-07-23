@@ -16,7 +16,7 @@ from sam_ml.oct.dataset import OCTManifestDataset, build_oct_transform
 from sam_ml.oct.ensemble import average_probabilities, sequential_ensemble_predict
 from sam_ml.oct.explain import occlusion_sensitivity
 from sam_ml.oct.inference import predict_image
-from sam_ml.oct.metrics import evaluate_predictions, specificity_per_class
+from sam_ml.oct.metrics import evaluate_predictions, save_evaluation_artifacts, specificity_per_class
 from sam_ml.oct.models import create_oct_model
 
 
@@ -62,7 +62,66 @@ def test_manifests_preserve_official_test_and_prevent_leakage(tmp_path):
     manifests = create_manifests(config)
     assert set(manifests) == {"train", "val", "test"}
     assert len(manifests["test"]) == 4
+    assert set(manifests["train"]["patient_id"]).isdisjoint(manifests["val"]["patient_id"])
+    assert set(manifests["test"]["image_path"]) == {
+        str(path).replace("\\", "/") for path in (root / "test").glob("*/*.jpeg")
+    }
     validate_no_leakage(manifests)
+
+
+def test_train_validation_split_is_reproducible_and_test_is_untouched(tmp_path):
+    root = tmp_path / "raw"
+    _official_dataset(root)
+
+    def generate(output_name):
+        config = OCTConfig()
+        config.data.root = root
+        config.data.manifest_dir = tmp_path / output_name
+        config.data.exclusions_file = config.data.manifest_dir / "excluded_images.csv"
+        return create_manifests(config)
+
+    first = generate("first")
+    second = generate("second")
+    pd.testing.assert_frame_equal(
+        first["train"].reset_index(drop=True), second["train"].reset_index(drop=True)
+    )
+    pd.testing.assert_frame_equal(
+        first["val"].reset_index(drop=True), second["val"].reset_index(drop=True)
+    )
+    pd.testing.assert_frame_equal(
+        first["test"].reset_index(drop=True), second["test"].reset_index(drop=True)
+    )
+
+
+def test_missing_patient_id_requires_explicit_image_split_opt_in(tmp_path):
+    root = tmp_path / "raw"
+    for class_index, label in enumerate(CLASS_NAMES):
+        for index in range(10):
+            _write_image(
+                root / "train" / label / f"unknown_{label}_{index}.jpeg",
+                class_index * 20 + index,
+            )
+        _write_image(root / "test" / label / f"test_unknown_{label}.jpeg", 150 + class_index)
+    config = OCTConfig()
+    config.data.root = root
+    config.data.manifest_dir = tmp_path / "manifests"
+    config.data.exclusions_file = config.data.manifest_dir / "excluded_images.csv"
+    with pytest.raises(ValueError, match="allow_image_level_split=true"):
+        create_manifests(config)
+    config.data.allow_image_level_split = True
+    with pytest.warns(RuntimeWarning, match="risk of leakage"):
+        manifests = create_manifests(config)
+    assert set(manifests) == {"train", "val", "test"}
+
+
+def test_validation_transform_is_deterministic_and_has_no_augmentation():
+    validation_transform = build_oct_transform(False, image_size=64)
+    names = {type(transform).__name__ for transform in validation_transform.transforms}
+    assert "RandomHorizontalFlip" not in names
+    assert "RandomResizedCrop" not in names
+    assert {"Resize", "CenterCrop"}.issubset(names)
+    image = Image.fromarray(np.arange(96 * 96, dtype=np.uint8).reshape(96, 96))
+    assert torch.equal(validation_transform(image), validation_transform(image))
 
 
 def test_leakage_validator_rejects_shared_patient(tmp_path):
@@ -119,6 +178,20 @@ def test_metrics_specificity_and_auc():
     assert result["accuracy"] == 1.0
     assert result["per_class"]["CNV"]["specificity"] == 1.0
     assert result["macro_auc"] == 1.0
+
+
+def test_complete_evaluation_artifacts_are_saved(tmp_path):
+    truth = np.array([0, 1, 2, 3] * 3)
+    probabilities = np.eye(4)[truth] * 0.9 + 0.025
+    probabilities /= probabilities.sum(1, keepdims=True)
+    metrics = evaluate_predictions(truth, probabilities)
+    save_evaluation_artifacts(truth, probabilities, metrics, tmp_path)
+    expected = {
+        "metrics_summary.csv", "metrics_per_class.csv", "confusion_matrix.csv",
+        "confusion_matrix_normalized.csv", "confusion_matrix.png",
+        "confusion_matrix_normalized.png", "roc_curves.csv", "roc_curves.png",
+    }
+    assert expected.issubset({path.name for path in tmp_path.iterdir()})
 
 
 def test_cpu_inference_and_occlusion(tmp_path):

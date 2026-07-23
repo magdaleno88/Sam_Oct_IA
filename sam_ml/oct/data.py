@@ -187,14 +187,23 @@ def audit_dataset(
 
 
 def _group_holdout(frame: pd.DataFrame, fraction: float, seed: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    groups_per_class = frame.groupby("label")["patient_id"].nunique()
-    min_groups = int(groups_per_class.min())
-    if min_groups < 2:
-        raise ValueError("Patient-level split requires at least two patient groups per class")
-    n_splits = min(max(2, round(1 / fraction)), min_groups)
-    splitter = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-    train_idx, holdout_idx = next(splitter.split(frame, frame["label"], frame["patient_id"]))
-    return frame.iloc[train_idx].copy(), frame.iloc[holdout_idx].copy()
+    """Select a reproducible class-stratified holdout while keeping patients intact.
+
+    The requested fraction is applied to patient groups inside every class. Image counts can
+    differ slightly from the requested percentage because a patient is never split.
+    """
+    rng = np.random.default_rng(seed)
+    holdout_patients: set[str] = set()
+    for label, class_frame in frame.groupby("label", sort=True):
+        patients = np.asarray(sorted(class_frame["patient_id"].astype(str).unique()))
+        if len(patients) < 2:
+            raise ValueError(
+                f"Patient-level split requires at least two patient groups for class {label}"
+            )
+        count = min(len(patients) - 1, max(1, round(len(patients) * fraction)))
+        holdout_patients.update(rng.choice(patients, size=count, replace=False).tolist())
+    holdout_mask = frame["patient_id"].astype(str).isin(holdout_patients)
+    return frame.loc[~holdout_mask].copy(), frame.loc[holdout_mask].copy()
 
 
 def _image_holdout(frame: pd.DataFrame, fraction: float, seed: int) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -269,6 +278,8 @@ def create_manifests(
     official_val = frame[frame["split"] == "val"].copy()
     if not official_test.empty:
         train_pool = frame[frame["split"] == "train"].copy()
+        if train_pool.empty:
+            raise ValueError("An official test split exists, but no train split was found")
         if official_val.empty:
             train, val = split_fn(train_pool, config.data.val_fraction, config.data.seed)
         else:
