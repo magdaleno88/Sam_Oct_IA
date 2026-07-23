@@ -190,11 +190,41 @@ config.local.yml
 *.weights.h5
 checkpoints/
 outputs/
+runs/
+reports/*.csv
+data/manifests/*.csv
+!data/manifests/.gitkeep
 
 # Data files
-data/raw/*
-data/processed/*
+data/raw/
+data/sampled/
+data/processed/
+data/balanced/
+data/**/*.jpg
+data/**/*.jpeg
+data/**/*.png
+data/**/*.tif
+data/**/*.tiff
 
 # Ignored files
 constraints.txt
 lighting logs/
+
+# Modelos y experimentos
+runs/
+checkpoints/
+models/
+*.ckpt
+*.pth
+*.pt
+*.onnx
+
+# Reportes generados
+reports/oct_preprocessing/
+reports/dataset_management/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log

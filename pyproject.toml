@@ -22,11 +22,16 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "xgboost>=3.2.0",
     "lightgbm>=4.6.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.scripts]
 preprocess-dataset = "sam_ml.preprocessing:main"
 train-model = "sam_ml.modeling.train:main"
+oct-audit = "sam_ml.oct.cli:audit_main"
+oct-create-splits = "sam_ml.oct.cli:create_splits_main"
+oct-preprocess = "sam_ml.oct.cli:preprocess_main"
+oct-predict = "sam_ml.oct.cli:predict_main"
 
 [tool.uv.build-backend]
 # Configure uv_build to use root-level packages (not src/ layout)

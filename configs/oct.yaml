@@ -1,0 +1,95 @@
+data:
+  root: data/raw
+  manifest_dir: data/manifests
+  image_size: 224
+  classes: [CNV, DME, DRUSEN, NORMAL]
+  patient_level_split: true
+  allow_image_level_split: false
+  val_fraction: 0.1
+  test_fraction: 0.15
+  seed: 42
+  exclusions_file: data/manifests/excluded_images.csv
+preprocessing:
+  enabled: true
+  target_size: 224
+  output_root: data/processed/oct
+  quality_control_dir: reports/oct_preprocessing
+  white_threshold: 250
+  min_artifact_area: 64
+  min_artifact_area_fraction: 0.0005
+  min_near_white_fraction: 0.9
+  border_width: 2
+  corner_margin_fraction: 0.2
+  min_corner_margin_fraction: 0.5
+  mask_dilation: 2
+  background_top_fraction: 0.35
+  background_patch_size: 32
+  background_max_mean: 100.0
+  background_min_std: 1.5
+  fill_inpaint_weight: 0.35
+  crop_empty_margins: true
+  max_crop_fraction_per_side: 0.08
+  max_aspect_ratio: 2.0
+  extreme_aspect_mode: letterbox
+  overlap_fraction: 0.25
+  percentile_normalization: false
+  lower_percentile: 1.0
+  upper_percentile: 99.0
+  clahe: false
+  clahe_clip_limit: 1.5
+  light_denoise: none
+  orientation_correction: false
+  seed: 42
+  audit_sample_size: 32
+dataset_management:
+  extensions: [.jpg, .jpeg, .png, .bmp, .tif, .tiff]
+  seed: 42
+  reports_dir: reports/dataset_management
+  sampling:
+    percentage: 10.0
+    unit: auto
+    mode: copy
+    preserve_splits: true
+    minimum_per_class: 1
+  balancing:
+    enabled: false
+    strategy: moderate
+    mode: class-weights
+    splits: [train]
+    max_ratio: 2.0
+    max_undersample_fraction: 0.30
+    max_oversample_factor: 1.50
+    min_class_weight: 0.5
+    max_class_weight: 2.0
+    sampling_unit: auto
+model:
+  name: improved_resnet50
+  pretrained: true
+  num_classes: 4
+  dropout: 0.2
+  replace_stride_with_dilation: [false, true, true]
+  freeze_backbone: false
+training:
+  seed: 42
+  learning_rate: 0.00001
+  weight_decay: 0.0001
+  batch_size: 16
+  effective_batch_size: 128
+  max_steps: 10000
+  max_epochs: 100
+  early_stopping_patience: 10
+  mixed_precision: true
+  ensemble_size: 4
+  balance_mode: none
+  focal_gamma: 2.0
+  num_workers: 0
+  monitor: val_loss
+explainability:
+  occlusion_window: 28
+  occlusion_stride: 7
+  occlusion_value: 0.0
+  gradcam: true
+  high_confidence: 0.9
+  borderline_min: 0.25
+  borderline_max: 0.6
+  margin_threshold: 0.1
