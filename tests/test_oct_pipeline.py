@@ -1,5 +1,6 @@
 """Synthetic-only tests for the OCT infrastructure; no clinical data is used."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +25,8 @@ from sam_ml.oct.explain import occlusion_sensitivity
 from sam_ml.oct.inference import predict_image
 from sam_ml.oct.metrics import evaluate_predictions, save_evaluation_artifacts, specificity_per_class
 from sam_ml.oct.models import create_oct_model
+from sam_ml.oct import training as oct_training
+from sam_ml.oct.training import _write_environment
 
 
 def _write_image(path: Path, value: int = 100) -> None:
@@ -109,10 +112,62 @@ def test_automatic_train_test_split_stays_in_memory(tmp_path):
 
     splits, source = load_dataset_splits(config)
 
-    assert source == "in-memory"
+    assert source == "folder_in_memory_split"
     assert set(splits) == {"train", "val", "test"}
     assert set(splits["train"]["patient_id"]).isdisjoint(splits["val"]["patient_id"])
     assert len(splits["test"]) == 4
+    assert not config.data.manifest_dir.exists()
+
+
+def test_environment_json_without_manifests_records_in_memory_split(tmp_path):
+    config = OCTConfig()
+    config.data.root = tmp_path / "raw"
+    config.data.manifest_dir = tmp_path / "manifests"
+    output = tmp_path / "run" / "environment.json"
+
+    environment = _write_environment(
+        config, config.data.manifest_dir, "folder_in_memory_split", output,
+    )
+    saved = json.loads(output.read_text(encoding="utf-8"))
+
+    assert saved == environment
+    assert saved["data_mode"] == "folder_in_memory_split"
+    assert saved["manifest_hashes"] == {}
+    assert saved["dataset_path"] == str(config.data.root)
+    assert saved["split"] == {
+        "val_fraction": config.data.val_fraction,
+        "seed": config.data.seed,
+        "patient_level_split": True,
+        "method": "StratifiedGroupKFold",
+    }
+
+
+def test_train_experiment_runs_without_manifests(tmp_path, monkeypatch):
+    root = tmp_path / "raw"
+    _official_dataset(root)
+    config = OCTConfig()
+    config.data.root = root
+    config.data.manifest_dir = tmp_path / "manifests"
+    config.data.exclusions_file = config.data.manifest_dir / "excluded_images.csv"
+    config.model.pretrained = False
+
+    class FakeTrainer:
+        def __init__(self, logger, **kwargs):
+            self.logger = logger
+
+        def fit(self, model, train_loader, val_loader, ckpt_path=None):
+            assert train_loader.dataset.rows["split"].eq("train").all()
+            assert val_loader.dataset.rows["split"].eq("val").all()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(oct_training.pl, "Trainer", FakeTrainer)
+    monkeypatch.setattr(oct_training, "OCTLightningModule", lambda *args, **kwargs: object())
+
+    run_dir, _ = oct_training.train_experiment(config, "without_manifests")
+    environment = json.loads((run_dir / "environment.json").read_text(encoding="utf-8"))
+
+    assert environment["data_mode"] == "folder_in_memory_split"
+    assert environment["manifest_hashes"] == {}
     assert not config.data.manifest_dir.exists()
 
 
@@ -134,6 +189,42 @@ def test_existing_manifests_take_priority_over_automatic_split(tmp_path):
             expected[name].reset_index(drop=True),
             loaded[name].reset_index(drop=True),
             check_dtype=False,
+        )
+
+
+def test_environment_json_with_all_manifests_contains_hashes(tmp_path):
+    root = tmp_path / "raw"
+    _official_dataset(root)
+    config = OCTConfig()
+    config.data.root = root
+    config.data.manifest_dir = tmp_path / "manifests"
+    config.data.exclusions_file = config.data.manifest_dir / "excluded_images.csv"
+    create_manifests(config)
+    output = tmp_path / "run" / "environment.json"
+
+    saved = _write_environment(config, config.data.manifest_dir, "manifest", output)
+
+    assert json.loads(output.read_text(encoding="utf-8")) == saved
+    assert saved["data_mode"] == "manifest_files"
+    assert set(saved["manifest_hashes"]) == {"train", "val", "test"}
+    assert all(len(digest) == 64 for digest in saved["manifest_hashes"].values())
+
+
+def test_partial_manifests_fail_explicitly_for_loading_and_environment(tmp_path):
+    config = OCTConfig()
+    config.data.root = tmp_path / "raw"
+    config.data.manifest_dir = tmp_path / "manifests"
+    config.data.manifest_dir.mkdir()
+    pd.DataFrame().to_csv(config.data.manifest_dir / "train.csv", index=False)
+
+    with pytest.raises(FileNotFoundError, match="Incomplete manifest set"):
+        load_dataset_splits(config)
+    with pytest.raises(FileNotFoundError, match="Incomplete manifest set"):
+        _write_environment(
+            config,
+            config.data.manifest_dir,
+            "manifest",
+            tmp_path / "run" / "environment.json",
         )
 
 

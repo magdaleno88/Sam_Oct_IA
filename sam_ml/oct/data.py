@@ -365,7 +365,7 @@ def load_dataset_splits(
         )
     return (
         split_dataset_frame(config, frame, progress_disabled=progress_disabled),
-        "in-memory",
+        "folder_in_memory_split",
     )
 
 

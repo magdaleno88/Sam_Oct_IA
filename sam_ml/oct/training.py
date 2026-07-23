@@ -103,19 +103,55 @@ def _environment(
         commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     except Exception:
         commit = None
-    manifest_hashes = {
-        name: manifest_sha256(manifest_dir / f"{name}.csv")
+    manifest_paths = {
+        name: manifest_dir / f"{name}.csv"
         for name in ("train", "val", "test")
-        if (manifest_dir / f"{name}.csv").exists()
     }
+    existing = {name for name, path in manifest_paths.items() if path.exists()}
+    if existing and existing != set(manifest_paths):
+        missing = sorted(set(manifest_paths) - existing)
+        raise FileNotFoundError(
+            "Incomplete manifest set while creating environment.json. "
+            f"Missing manifests: {missing}"
+        )
+    manifest_hashes = (
+        {name: manifest_sha256(path) for name, path in manifest_paths.items()}
+        if existing else {}
+    )
+    data_mode = "manifest_files" if existing else "folder_in_memory_split"
+    split_method = (
+        "StratifiedGroupKFold"
+        if config.data.patient_level_split
+        else "stratified_train_test_split"
+    )
     return {
         "created_at": datetime.now(timezone.utc).isoformat(), "seed": config.training.seed,
         "python": sys.version, "platform": platform.platform(), "packages": packages,
         "cuda_available": torch.cuda.is_available(), "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "git_commit": commit,
         "split_source": split_source,
+        "data_mode": data_mode,
+        "dataset_path": str(config.data.root),
+        "split": {
+            "val_fraction": config.data.val_fraction,
+            "seed": config.data.seed,
+            "patient_level_split": config.data.patient_level_split,
+            "method": split_method,
+        },
         "manifest_hashes": manifest_hashes,
     }
+
+
+def _write_environment(
+    config: OCTConfig,
+    manifest_dir: Path,
+    split_source: str,
+    output_path: Path,
+) -> dict[str, object]:
+    environment = _environment(config, manifest_dir, split_source)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(environment, indent=2), encoding="utf-8")
+    return environment
 
 
 def train_experiment(config: OCTConfig, experiment: str, resume: str | None = None, seed: int | None = None):
@@ -130,9 +166,11 @@ def train_experiment(config: OCTConfig, experiment: str, resume: str | None = No
     splits, split_source = load_dataset_splits(config)
     train_frame = splits["train"]
     val_frame = splits["val"]
-    (run_dir / "environment.json").write_text(
-        json.dumps(_environment(config, config.data.manifest_dir, split_source), indent=2),
-        encoding="utf-8",
+    _write_environment(
+        config,
+        config.data.manifest_dir,
+        split_source,
+        run_dir / "environment.json",
     )
     weights = _class_weights(train_frame) if config.training.balance_mode in {"class_weights", "focal"} else None
     train_ds = OCTManifestDataset(
