@@ -93,6 +93,57 @@ class DatasetManagementConfig(BaseModel):
     sampling: DatasetSamplingConfig = Field(default_factory=DatasetSamplingConfig)
     balancing: DatasetBalancingConfig = Field(default_factory=DatasetBalancingConfig)
 
+
+class PreparationSamplingConfig(BaseModel):
+    percentage: float = Field(10.0, gt=0, le=100)
+    unit: Literal["auto", "patient", "image"] = "auto"
+    mode: Literal["copy", "manifest"] = "copy"
+    allow_image_level_sampling: bool = False
+    minimum_per_class: int = Field(1, ge=1)
+
+
+class PreparationTestConfig(BaseModel):
+    percentage: Literal[100.0] = 100.0
+    preserve_exactly: bool = True
+
+
+class PreparationBalancingConfig(BaseModel):
+    enabled: bool = True
+    mode: Literal["none", "moderate", "moderate-physical", "class-weights"] = "moderate-physical"
+    max_ratio: float = Field(2.0, ge=1)
+    max_undersample_fraction: float = Field(0.30, ge=0, lt=1)
+    max_oversample_factor: float = Field(1.50, ge=1)
+
+
+class PreparationPreprocessingConfig(BaseModel):
+    enabled: bool = True
+    use_existing_config: bool = True
+
+
+class PreparationIntegrityConfig(BaseModel):
+    verify_test_counts: bool = True
+    verify_relative_paths: bool = True
+    calculate_hashes: bool = False
+
+
+class DatasetPreparationConfig(BaseModel):
+    """Settings for the transactional, train-only preparation workflow."""
+
+    input_root: Path = Path("data/raw")
+    output_root: Path = Path("data/prepared/oct")
+    reports_root: Path = Path("reports/oct_dataset_preparation")
+    experiment_name: str | None = None
+    seed: int = 42
+    train_sampling: PreparationSamplingConfig = Field(default_factory=PreparationSamplingConfig)
+    test: PreparationTestConfig = Field(default_factory=PreparationTestConfig)
+    balancing: PreparationBalancingConfig = Field(default_factory=PreparationBalancingConfig)
+    preprocessing: PreparationPreprocessingConfig = Field(default_factory=PreparationPreprocessingConfig)
+    integrity: PreparationIntegrityConfig = Field(default_factory=PreparationIntegrityConfig)
+    overwrite: bool = False
+    keep_temp_on_error: bool = False
+    generate_training_config: bool = True
+    generated_config_dir: Path = Path("configs/generated")
+
 class OCTModelConfig(BaseModel):
     name: Literal["baseline_resnet50", "improved_resnet50"] = "improved_resnet50"
     pretrained: bool = True
@@ -134,6 +185,7 @@ class OCTConfig(BaseModel):
     data: OCTDataConfig = Field(default_factory=OCTDataConfig)
     preprocessing: OCTPreprocessingConfig = Field(default_factory=OCTPreprocessingConfig)
     dataset_management: DatasetManagementConfig = Field(default_factory=DatasetManagementConfig)
+    dataset_preparation: DatasetPreparationConfig = Field(default_factory=DatasetPreparationConfig)
     model: OCTModelConfig = Field(default_factory=OCTModelConfig)
     training: OCTTrainingConfig = Field(default_factory=OCTTrainingConfig)
     explainability: OCTExplainabilityConfig = Field(default_factory=OCTExplainabilityConfig)

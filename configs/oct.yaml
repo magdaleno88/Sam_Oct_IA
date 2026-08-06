@@ -62,6 +62,38 @@ dataset_management:
     min_class_weight: 0.5
     max_class_weight: 2.0
     sampling_unit: auto
+dataset_preparation:
+  input_root: data/raw
+  output_root: data/prepared/oct
+  reports_root: reports/oct_dataset_preparation
+  seed: 42
+  train_sampling:
+    percentage: 10.0
+    unit: auto
+    mode: copy
+    allow_image_level_sampling: false
+    minimum_per_class: 1
+  test:
+    percentage: 100.0
+    preserve_exactly: true
+  balancing:
+    enabled: true
+    mode: moderate-physical
+    max_ratio: 2.0
+    max_undersample_fraction: 0.30
+    max_oversample_factor: 1.50
+  preprocessing:
+    enabled: true
+    use_existing_config: true
+  integrity:
+    verify_test_counts: true
+    verify_relative_paths: true
+    calculate_hashes: false
+  overwrite: false
+  keep_temp_on_error: false
+  generate_training_config: true
+  generated_config_dir: configs/generated
+  verify_test_hashes: false
 model:
   name: improved_resnet50
   pretrained: true

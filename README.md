@@ -681,6 +681,158 @@ reports/dataset_management/
 └── class_weights.json
 ```
 
+## Preparación unificada del dataset OCT
+
+El flujo recomendado reúne en una sola ejecución el muestreo reproducible de `train`, el
+balanceo moderado, el preprocesamiento y la verificación estricta de `test`. Los originales
+no se modifican y el resultado sólo se publica cuando termina correctamente.
+
+Se reduce sólo `train` para acelerar experimentos sin degradar ni cambiar el conjunto oficial de
+evaluación. El balanceo también se limita a entrenamiento para que las métricas conserven la
+prevalencia observada. Las augmentations no se guardan: continúan aplicándose dinámicamente en el
+`DataLoader`, lo cual evita convertir variaciones aleatorias en copias permanentes.
+
+```powershell
+uv run python scripts/prepare_oct_dataset.py `
+  --config configs/oct.yaml `
+  --input-root data/raw `
+  --output-root data/prepared/oct `
+  --train-percentage 10 `
+  --sampling-unit auto `
+  --balance-mode moderate-physical
+```
+
+Variantes habituales:
+
+```powershell
+# 25% de train, test completo y sin balanceo
+uv run python scripts/prepare_oct_dataset.py --config configs/oct.yaml --input-root data/raw --output-root data/prepared/oct_25 --train-percentage 25 --balance-mode none
+
+# Dataset completo con balanceo moderado físico
+uv run python scripts/prepare_oct_dataset.py --config configs/oct.yaml --input-root data/raw --output-root data/prepared/oct_100 --train-percentage 100 --balance-mode moderate-physical
+
+# 10% y pesos de clase, sin eliminar ni repetir imágenes
+uv run python scripts/prepare_oct_dataset.py --config configs/oct.yaml --input-root data/raw --output-root data/prepared/oct_10_weights --train-percentage 10 --balance-mode class-weights
+```
+
+La salida conserva exclusivamente esta estructura:
+
+```text
+data/prepared/oct/
+├── train/{CNV,DME,DRUSEN,NORMAL}/
+└── test/{CNV,DME,DRUSEN,NORMAL}/
+```
+
+Reglas importantes:
+
+- El porcentaje se aplica únicamente a `train`; `test` se procesa completo, sin muestreo ni balanceo.
+- `auto` usa pacientes sólo si todos los identificadores son confiables. El nivel imagen exige
+  `--allow-image-level-sampling` para aceptar explícitamente el riesgo de fuga.
+- `moderate-physical` materializa un balance moderado; `class-weights` conserva las imágenes y
+  genera pesos; `none` desactiva el balanceo.
+- Las repeticiones físicas se nombran `__repeat_001`, `__repeat_002`, etcétera.
+- La construcción ocurre en una carpeta temporal hermana y se publica mediante renombrado atómico.
+  `--overwrite` permite reemplazar una salida y `--keep-temp-on-error` conserva un fallo para diagnóstico.
+- `--no-progress` elimina las barras animadas. `--no-generate-training-config` omite la configuración
+  compatible con el entrenador.
+
+La sección `dataset_preparation` de `configs/oct.yaml` contiene los valores predeterminados. Los
+argumentos de línea de comandos tienen precedencia:
+
+```yaml
+dataset_preparation:
+  input_root: data/raw
+  output_root: data/prepared/oct
+  reports_root: reports/oct_dataset_preparation
+  seed: 42
+  train_sampling:
+    percentage: 10.0
+    unit: auto
+    mode: copy
+    allow_image_level_sampling: false
+    minimum_per_class: 1
+  test:
+    percentage: 100.0
+    preserve_exactly: true
+  balancing:
+    enabled: true
+    mode: moderate-physical
+    max_ratio: 2.0
+    max_undersample_fraction: 0.30
+    max_oversample_factor: 1.50
+  preprocessing:
+    enabled: true
+    use_existing_config: true
+  integrity:
+    verify_test_counts: true
+    verify_relative_paths: true
+    calculate_hashes: false
+  overwrite: false
+  keep_temp_on_error: false
+  generate_training_config: true
+  generated_config_dir: configs/generated
+```
+
+Si `experiment_name` no se define, se utiliza el nombre de `output_root`; por ejemplo,
+`data/prepared/oct_10` genera el experimento `oct_10`.
+
+### Reportes del pipeline
+
+Cada ejecución genera evidencia suficiente para reconstruir la selección y auditar el resultado:
+
+```text
+reports/oct_dataset_preparation/<experiment_name>/
+├── preparation_summary.json
+├── preparation_summary.csv
+├── original_distribution.csv
+├── original_distribution.json
+├── selected_train_distribution.csv
+├── selected_train_distribution.json
+├── balanced_train_distribution.csv
+├── balanced_train_distribution.json
+├── final_distribution.csv
+├── final_distribution.json
+├── selection_manifest.csv
+├── balance_manifest.csv
+├── preprocessing_report.csv
+├── preprocessing_errors.csv
+├── test_integrity_report.json
+├── manifests/
+│   ├── train.csv
+│   ├── val.csv
+│   └── test.csv
+└── quality_control/
+```
+
+- `selection_manifest.csv` identifica cada archivo original y si fue seleccionado.
+- `balance_manifest.csv` conserva el origen de cada salida y el índice de repetición.
+- `preprocessing_errors.csv` permite localizar imágenes que no pudieron procesarse.
+- `test_integrity_report.json` confirma el mapeo uno a uno, los conteos por clase y la ausencia de
+  archivos faltantes o adicionales.
+- `preparation_summary.*` registra porcentajes, pacientes, distribuciones, correcciones, errores,
+  duración, velocidad y configuración generada.
+
+Ante un error también se escribe `preparation_error.json`. La salida temporal se elimina de forma
+predeterminada o se conserva con `--keep-temp-on-error`.
+
+Cuando está habilitada, la configuración generada queda en
+`configs/generated/<experiment_name>.yaml`. También se generan manifiestos `train/val/test` para
+el entrenador existente; `val` se deriva de `train` de forma determinista y por paciente cuando
+la muestra lo permite, y las repeticiones físicas no entran a validación. La configuración generada
+desactiva un segundo preprocesamiento porque las imágenes finales ya están preparadas. Después se
+puede iniciar el entrenamiento directamente:
+
+```powershell
+uv run python scripts/train_oct.py `
+  --config configs/generated/oct_10.yaml `
+  --model baseline_resnet50 `
+  --experiment oct_10_baseline
+```
+
+El pipeline imprime este comando al finalizar. No altera silenciosamente el archivo de configuración
+original y no modifica la arquitectura ResNet50, las métricas, la inferencia ni las augmentations del
+entrenamiento.
+
 ## Pruebas
 
 Suite completa:
@@ -698,7 +850,7 @@ uv run --extra test pytest --cov=sam_ml --cov-report=html
 Estado verificado más reciente:
 
 ```text
-171 passed
+176 passed
 ```
 
 Las pruebas incluyen:
@@ -715,6 +867,10 @@ Las pruebas incluyen:
 - Distribución, muestreo reproducible y pacientes completos.
 - Copy/manifest y seguridad de rutas.
 - Balanceo moderado y preservación de val/test.
+- Preparación unificada transaccional con imágenes sintéticas.
+- Integridad exacta del test oficial y registro de archivos corruptos.
+- Reproducibilidad del muestreo y conservación de pacientes completos.
+- Compatibilidad del dataset preparado con `OCTManifestDataset`.
 
 Las pruebas OCT usan imágenes sintéticas; no representan rendimiento clínico.
 
@@ -762,4 +918,3 @@ Referencia principal:
 F. Li et al., “Deep learning-based automated detection of retinal diseases using optical coherence
 tomography images,” *Biomedical Optics Express*, 10(12), 6204–6226, 2019.
 DOI: `10.1364/BOE.10.006204`.
-

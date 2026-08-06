@@ -302,6 +302,11 @@ def _write_image(path: Path, image: np.ndarray) -> None:
     encoded.tofile(path)
 
 
+def write_oct_image(path: str | Path, image: np.ndarray) -> None:
+    """Encode a processed OCT image using the pipeline's Unicode-safe writer."""
+    _write_image(Path(path), image)
+
+
 def save_quality_control(
     qc_dir: Path, relative: Path, original: np.ndarray, result: PreprocessingResult
 ) -> None:
