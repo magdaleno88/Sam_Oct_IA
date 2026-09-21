@@ -1,4 +1,4 @@
-SAM - AI
+# SAM - AI
 
 A computer vision research project with two independent retinal imaging workflows: diabetic retinopathy analysis using fundus photographs, and macular OCT classification using B-scan images. The original DDR2019 workflow remains available alongside the OCT pipeline.
 
