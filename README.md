@@ -2,6 +2,8 @@
 
 A computer vision research project with two independent retinal imaging workflows: diabetic retinopathy analysis using fundus photographs, and macular OCT classification using B-scan images. The original DDR2019 workflow remains available alongside the OCT pipeline.
 
+[Caso de estudio en español / English case study](docs/CASE_STUDY.md) · [Automated test workflow](.github/workflows/tests.yml)
+
 | Workflow | Images | Dataset | Code and configuration |
 |---|---|---|---|
 | Diabetic retinopathy | Color fundus photographs | DDR2019 | `sam_ml/preprocessing/`, `sam_ml/datasets/`, `sam_ml/modeling/`, `sam_ml/config.py` |
@@ -315,4 +317,3 @@ https://www.sciencedirect.com/science/article/pii/S2666307423000050
 
 9. Zaharia, M., Chen, A., Davidson, A., Ghodsi, A., Hong, S. A., Konwinski, A., ... & Zumar, C.
 (2018). Accelerating the machine learning lifecycle with MLflow. IEEE Data Eng. Bull., 41(4), 39-45. https://people.eecs.berkeley.edu/~alig/papers/mlflow.pdf
-
