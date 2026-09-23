@@ -4,6 +4,8 @@ A computer vision research project with two independent retinal imaging workflow
 
 [Caso de estudio en español / English case study](docs/CASE_STUDY.md) · [Automated test workflow](.github/workflows/tests.yml)
 
+**OCT test results supplied by the author:** accuracy **91.9%**, macro F1 **0.919354**, macro AUC **0.992719**, from **1,000 test images** after training on approximately **30,000 images**. See the [confusion matrix, complete metric summary and evaluation limits](docs/OCT_RESULTS.md). Raw predictions and the experiment record have not yet been supplied.
+
 | Workflow | Images | Dataset | Code and configuration |
 |---|---|---|---|
 | Diabetic retinopathy | Color fundus photographs | DDR2019 | `sam_ml/preprocessing/`, `sam_ml/datasets/`, `sam_ml/modeling/`, `sam_ml/config.py` |

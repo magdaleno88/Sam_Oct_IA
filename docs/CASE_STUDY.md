@@ -18,7 +18,7 @@ El código incluye carga y preprocesamiento de imágenes, preparación de conjun
 2. Revisa la [preparación de OCT](../sam_ml/oct/preparation.py) y la [evaluación](../scripts/evaluate.py).
 3. Ejecuta `uv sync --extra test` y `uv run pytest -m "not slow and not gpu" tests` para comprobar el código sin un conjunto clínico.
 
-El repositorio contiene el **código para calcular** métricas, matriz de confusión y ROC-AUC, pero este caso de estudio todavía no publica un resultado numérico verificable ni pesos entrenados. No se presenta como herramienta de diagnóstico clínico.
+El autor proporcionó [las métricas y la matriz de confusión de prueba OCT](OCT_RESULTS.md): exactitud **91.9 %**, F1 macro **0.919354** y AUC macro **0.992719** sobre **1 000 imágenes de prueba**, tras usar aproximadamente **30 000 imágenes de entrenamiento**. El modelo evaluado, las predicciones y el registro del experimento todavía no están disponibles para comprobar toda la evaluación de forma independiente. No se presenta como herramienta de diagnóstico clínico.
 
 ## English
 
@@ -36,4 +36,4 @@ The code covers image loading and preprocessing, dataset preparation, training, 
 2. Inspect [OCT preparation](../sam_ml/oct/preparation.py) and [evaluation](../scripts/evaluate.py).
 3. Run `uv sync --extra test` and `uv run pytest -m "not slow and not gpu" tests` to exercise the code without clinical data.
 
-The repository includes code for classification metrics, a confusion matrix and ROC-AUC, but this case study does not yet publish verified numeric results or trained weights. It is not presented as a clinical diagnostic tool.
+The author supplied [OCT test metrics and a confusion matrix](OCT_RESULTS.md): **91.9%** accuracy, **0.919354** macro F1 and **0.992719** macro AUC on **1,000 test images**, after training with approximately **30,000 images**. The evaluated model, predictions and experiment record are not yet available to verify the full evaluation independently. It is not presented as a clinical diagnostic tool.
